@@ -4,10 +4,66 @@ import uuid
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, APIRouter
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, OAuth2PasswordRequestFormStrict
+from datetime import datetime, timedelta, timezone
+from jose import jwt
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session, select
+from sqlalchemy import or_ # Added for search_term filter
+# typing.Optional is already imported at the top
+
+from passlib.context import CryptContext
+
+# JWT Configuration
+SECRET_KEY = "your-super-secret-key-that-should-be-in-env-var"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# OAuth2 Scheme (used by FastAPI for security dependencies)
+# The tokenUrl should match the actual endpoint that provides the token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/token") # Defined oauth2_scheme
+
+class TokenData(BaseModel):
+    email: Optional[str] = None # Changed from username to email to match User model
+
+# JWT Utility function to create access tokens
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        # Use ACCESS_TOKEN_EXPIRE_MINUTES for default if no delta provided
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(get_session)) -> User:
+    credentials_exception = HTTPException(
+        status_code=401, # Unauthorized
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: Optional[str] = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+        # TokenData can be used here for more stringent validation of payload if needed
+        # token_data = TokenData(email=email)
+    except JWTError: # Catches various JWT errors
+        raise credentials_exception
+
+    user = session.exec(select(User).where(User.email == email)).first()
+    if user is None:
+        raise credentials_exception # User not found for the email in token
+    return user
+
+async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user") # Or 403 Forbidden
+    return current_user
 
 # Assuming models are in database.py. Adjust if you created a separate models.py
 from .database import (
@@ -15,10 +71,13 @@ from .database import (
     engine,
     User,
     UserCreate,
+    UserReadWithClientProfile, # Added
+    ClientProfile,             # Added
     Product,
     ProductCreate,
     ProductRead,
     ProductUpdate
+    # get_session is defined below, Session and select are imported from sqlmodel directly
 )
 
 
@@ -205,31 +264,541 @@ def delete_product_endpoint(product_id: int, session: Session = Depends(get_sess
 app.include_router(products_router)
 
 
-# --- Placeholder Authentication Routes (Kept from previous steps) ---
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# --- Authentication Routes ---
+# oauth2_scheme is already defined above after JWT Configuration
 
-@app.post("/token")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    return {"access_token": form_data.username + "_fake_token", "token_type": "bearer"}
+class Token(BaseModel): # Define a Pydantic model for the token response
+    access_token: str
+    token_type: str
 
-@app.post("/users/", response_model=User)
-async def create_user(user: UserCreate):
-    dummy_hashed_password = user.password + "_hashed"
-    user_data_for_response = user.model_dump()
-    user_data_for_response.pop("password", None)
-    return User(
-        id=99,
-        hashed_password=dummy_hashed_password,
-        **user_data_for_response
+@app.post("/token", response_model=Token)
+async def login_for_access_token_endpoint( # Renamed for clarity from placeholder
+    form_data: OAuth2PasswordRequestFormStrict = Depends(),
+    session: Session = Depends(get_session)
+):
+    user = session.exec(select(User).where(User.email == form_data.username)).first() # form_data.username is email
+
+    if not user or not user.hashed_password: # Check if user exists and has a password
+        raise HTTPException(
+            status_code=401, # Corrected status_code to 401 for unauthorized
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active: # Check if user is active
+        raise HTTPException(
+            status_code=400, # Or 403 Forbidden
+            detail="Inactive user",
+        )
+
+    if not pwd_context.verify(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401, # Corrected status_code to 401
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
     )
+    return {"access_token": access_token, "token_type": "bearer"}
 
-@app.get("/users/me", response_model=User)
-async def read_users_me(token: str = Depends(oauth2_scheme)):
-    return User(
-        id=1,
-        username="currentuser",
-        email="current@example.com",
-        full_name="Current User",
-        disabled=False,
-        hashed_password="fake_hashed_password"
+# Password Hashing Setup (already defined, ensure it's before user creation endpoint)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+@app.post("/users/", response_model=UserReadWithClientProfile)
+def create_user_and_profile(user_in: UserCreate, session: Session = Depends(get_session)):
+    # Check if user (email) already exists
+    existing_user = session.exec(select(User).where(User.email == user_in.email)).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    hashed_password = get_password_hash(user_in.password)
+
+    # Create user dictionary for User model, excluding plain password
+    user_data_for_model = user_in.model_dump(exclude={"password"})
+
+    db_user = User(**user_data_for_model, hashed_password=hashed_password)
+
+    # Create an empty ClientProfile and associate it
+    db_client_profile = ClientProfile()
+    db_user.client_profile = db_client_profile
+
+    session.add(db_user)
+
+    try:
+        session.commit()
+        session.refresh(db_user)
+        # SQLModel automatically handles setting user_id on db_client_profile
+        # and client_profile.id is generated upon commit if db_user was committed with it.
+        # However, explicit refresh of the related object is good practice if you need its DB state immediately.
+        if db_user.client_profile:
+             session.refresh(db_user.client_profile)
+        else:
+            # This case implies the relationship or cascade did not work as expected.
+            # Attempt to fetch it to be sure, though this indicates a deeper issue if necessary.
+            profile_check = session.exec(select(ClientProfile).where(ClientProfile.user_id == db_user.id)).first()
+            if profile_check:
+                db_user.client_profile = profile_check
+            else:
+                # Log this critical issue: User created, profile not.
+                # Consider this a transaction failure or raise an internal error.
+                # For now, we'll proceed, but in a real app, this needs robust handling.
+                print(f"CRITICAL: ClientProfile not created for user ID {db_user.id}")
+
+
+    except Exception as e:
+        session.rollback()
+        print(f"Error during user creation: {e}") # Basic logging
+        raise HTTPException(status_code=500, detail=f"An error occurred during user creation.")
+
+    return db_user
+
+
+@app.get("/users/me", response_model=UserReadWithClientProfile) # Changed to UserReadWithClientProfile for consistency
+async def read_users_me(token: str = Depends(oauth2_scheme)): # This is a placeholder for a real "current user" logic
+    # In a real app, you'd decode the token to get the current user's ID,
+    # then fetch the user and their profile from the DB.
+    # For now, return a dummy user with a dummy profile.
+    dummy_user_data = {
+        "id": 1,
+        "email": "currentuser@example.com",
+        "full_name": "Current User",
+        "is_active": True,
+        "is_superuser": False,
+        # hashed_password is not part of UserRead or UserReadWithClientProfile
+    }
+    dummy_profile_data = {
+        "id": 1,
+        "user_id": 1,
+        "nickname": "CurrentNickname",
+        "whatsapp_number": "123456789",
+        "client_level": "Oro"
+    }
+
+    # Constructing the response model structure
+    # This is a bit manual for a dummy; real logic would fetch from DB
+    from .database import UserRead, ClientProfileRead as ClientProfileReadSchema # Use the Pydantic schema
+
+    user_read_part = UserRead(**dummy_user_data)
+    client_profile_read_part = ClientProfileReadSchema(**dummy_profile_data)
+
+    # Create the final response model instance
+    # UserReadWithClientProfile expects UserRead fields directly and a client_profile field
+    response_user = UserReadWithClientProfile(
+        **user_read_part.model_dump(),
+        client_profile=client_profile_read_part
     )
+    return response_user
+
+# --- Admin Client Profiles Router ---
+admin_clients_router = APIRouter(prefix="/api/admin/client-profiles", tags=["Admin - Client Profiles"])
+
+@admin_clients_router.get("/", response_model=List[UserReadWithClientProfile])
+def read_all_client_profiles_admin_filtered( # Renamed for clarity, or modify existing
+    skip: int = 0,
+    limit: int = 100,
+    search_term: Optional[str] = None,
+    client_level: Optional[str] = None,
+    is_active: Optional[bool] = None, # FastAPI handles str "true"/"false" to bool
+    session: Session = Depends(get_session),
+    # current_admin_user: User = Depends(get_current_active_admin_user) # TODO: Add admin auth if needed
+):
+    query = select(User).join(ClientProfile, isouter=True) # Start with an outer join to always get profile info if UserReadWithClientProfile needs it
+
+    if search_term:
+        search_pattern = f"%{search_term}%"
+        # Apply search on User fields and ClientProfile nickname
+        query = query.where(
+            or_(
+                User.full_name.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                ClientProfile.nickname.ilike(search_pattern) # Search nickname
+            )
+        )
+
+    if client_level:
+        # If join wasn't done above or needs to be more specific for filtering
+        # query = query.join(ClientProfile).where(ClientProfile.client_level == client_level)
+        # Since we did an outer join, we can just filter. If no profile, it won't match.
+        query = query.where(ClientProfile.client_level == client_level)
+
+
+    if is_active is not None:
+        query = query.where(User.is_active == is_active)
+
+    query = query.order_by(User.id) # Order for consistent pagination
+
+    final_query = query.offset(skip).limit(limit)
+    users = session.exec(final_query).all()
+
+    return users
+
+@admin_clients_router.get("/{user_id}", response_model=UserReadWithClientProfile)
+def read_single_client_profile_admin(user_id: int, session: Session = Depends(get_session)):
+    db_user = session.get(User, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    # db_user.client_profile will be None if no profile exists, which is handled by UserReadWithClientProfile
+    return db_user
+
+@admin_clients_router.put("/{user_id}", response_model=UserReadWithClientProfile)
+def update_client_profile_data_admin(user_id: int, profile_update: ClientProfileUpdate, session: Session = Depends(get_session)):
+    db_user = session.get(User, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db_client_profile = db_user.client_profile
+    if not db_client_profile:
+        # If profile doesn't exist, admin should use the POST endpoint to create one first
+        raise HTTPException(status_code=404, detail="ClientProfile not found for this user. Use POST to create one.")
+
+    update_data_dict = profile_update.model_dump(exclude_unset=True)
+    # Explicitly prevent profile_image_url update through this endpoint
+    update_data_dict.pop("profile_image_url", None)
+
+    for key, value in update_data_dict.items():
+        setattr(db_client_profile, key, value)
+
+    session.add(db_client_profile)
+    session.commit()
+    session.refresh(db_client_profile)
+    session.refresh(db_user) # Refresh user to ensure the response model gets updated profile
+    return db_user
+
+@admin_clients_router.post("/{user_id}/profile-image", response_model=UserReadWithClientProfile)
+async def upload_client_profile_image_admin(user_id: int, image: UploadFile = File(...), session: Session = Depends(get_session)):
+    db_user = session.get(User, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db_client_profile = db_user.client_profile
+    if not db_client_profile:
+        # Create a profile if one doesn't exist, or require it to exist first?
+        # For this endpoint, let's assume profile should exist or be created if missing.
+        # Simplified: Let's require profile to exist. Admin can create one via POST /api/admin/client-profiles/ if needed.
+         raise HTTPException(status_code=404, detail="ClientProfile not found. Create profile data first.")
+
+    # Ensure static/profile_images directory exists (already handled by product images, but good practice)
+    os.makedirs("static/profile_images", exist_ok=True)
+
+    # Delete old image if it exists
+    if db_client_profile.profile_image_url:
+        old_image_path = db_client_profile.profile_image_url.lstrip('/')
+        if os.path.exists(old_image_path):
+            try:
+                os.remove(old_image_path)
+            except OSError as e:
+                print(f"Error deleting old profile image {old_image_path}: {e}") # Log error
+
+    # Save new image
+    filename = f"{uuid.uuid4()}_{image.filename.replace('..', '')}"
+    file_path = f"static/profile_images/{filename}"
+
+    if image.content_type not in ["image/jpeg", "image/png", "image/gif", "image/webp"]:
+        raise HTTPException(status_code=400, detail="Invalid image file type.")
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(image.file, buffer)
+
+    db_client_profile.profile_image_url = f"/{file_path}"
+
+    session.add(db_client_profile)
+    session.commit()
+    session.refresh(db_client_profile)
+    session.refresh(db_user)
+    return db_user
+
+@admin_clients_router.delete("/{user_id}/profile-image", response_model=UserReadWithClientProfile)
+def delete_client_profile_image_admin(user_id: int, session: Session = Depends(get_session)):
+    db_user = session.get(User, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db_client_profile = db_user.client_profile
+    if not db_client_profile or not db_client_profile.profile_image_url:
+        raise HTTPException(status_code=404, detail="Profile image not found or client profile does not exist.")
+
+    image_file_path = db_client_profile.profile_image_url.lstrip('/')
+    if os.path.exists(image_file_path):
+        try:
+            os.remove(image_file_path)
+        except OSError as e:
+            print(f"Error deleting profile image file {image_file_path}: {e}") # Log error, but proceed
+
+    db_client_profile.profile_image_url = None
+    session.add(db_client_profile)
+    session.commit()
+    session.refresh(db_client_profile)
+    session.refresh(db_user)
+    return db_user
+
+@admin_clients_router.post("/", response_model=UserReadWithClientProfile)
+def create_client_profile_for_user_admin(profile_in: ClientProfileCreate, session: Session = Depends(get_session)):
+    db_user = session.get(User, profile_in.user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail=f"User with id {profile_in.user_id} not found")
+
+    if db_user.client_profile:
+        raise HTTPException(status_code=400, detail="User already has a client profile. Use PUT to update.")
+
+    # Create ClientProfile instance from the input, excluding profile_image_url
+    profile_data_dict = profile_in.model_dump()
+    profile_data_dict.pop("profile_image_url", None) # Ensure image_url is not set here
+
+    new_profile = ClientProfile(**profile_data_dict) # user_id is in profile_data_dict
+
+    db_user.client_profile = new_profile # Assign to the user
+    # session.add(new_profile) # Not strictly needed if db_user is added and cascade persist is on (default)
+    session.add(db_user) # Add user, which should cascade to new_profile
+
+    try:
+        session.commit()
+        session.refresh(db_user)
+        if db_user.client_profile: # Should exist now
+             session.refresh(db_user.client_profile)
+        else: # Should not happen
+            raise HTTPException(status_code=500, detail="Failed to create and associate client profile.")
+    except Exception as e:
+        session.rollback()
+        print(f"Error creating client profile for user {profile_in.user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not create client profile.")
+
+    return db_user
+
+@admin_clients_router.delete("/{user_id}", response_model=dict)
+def delete_client_profile_only_admin(user_id: int, session: Session = Depends(get_session)):
+    db_user = session.get(User, user_id)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    client_profile = db_user.client_profile
+    if not client_profile:
+        raise HTTPException(status_code=404, detail="ClientProfile not found for this user.")
+
+    # Delete associated image file, if any
+    if client_profile.profile_image_url:
+        image_file_path = client_profile.profile_image_url.lstrip('/')
+        if os.path.exists(image_file_path):
+            try:
+                os.remove(image_file_path)
+            except OSError as e:
+                print(f"Error deleting profile image file {image_file_path} during profile deletion: {e}")
+
+    session.delete(client_profile)
+    session.commit()
+    # db_user.client_profile should now be None or an expired instance after commit
+    # If you need to return the user object, ensure it's refreshed or handled appropriately.
+    return {"message": "ClientProfile deleted successfully. User account remains."}
+
+app.include_router(admin_clients_router)
+
+# --- "My Profile" Router (for logged-in users to manage their own ClientProfile) ---
+my_profile_router = APIRouter(
+    prefix="/api/me/profile",
+    tags=["My Profile"],
+    dependencies=[Depends(get_current_active_user)]
+)
+
+@my_profile_router.get("/", response_model=UserReadWithClientProfile)
+async def read_my_profile(current_user: User = Depends(get_current_active_user)):
+    # The get_current_active_user dependency already provides the current_user object,
+    # which includes the client_profile if eagerly loaded or accessed.
+    # SQLModel's default behavior with relationships usually makes client_profile accessible here
+    # if it was populated correctly when the User object was created/fetched.
+    # The UserReadWithClientProfile response model will handle serializing it.
+    return current_user
+
+from .database import MyProfileUpdate # Ensure this specific import is present
+
+@my_profile_router.put("/", response_model=UserReadWithClientProfile)
+async def update_my_profile_data(
+    profile_update_data: MyProfileUpdate,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    db_client_profile = current_user.client_profile
+
+    if not db_client_profile:
+        # This case should ideally not be reached if profiles are created on user registration.
+        # However, if it can occur, creating one might be an option, or raising an error.
+        # For now, let's assume profile must exist (created on user registration).
+        raise HTTPException(status_code=404, detail="ClientProfile not found for current user.")
+
+    update_data_dict = profile_update_data.model_dump(exclude_unset=True)
+
+    for key, value in update_data_dict.items():
+        setattr(db_client_profile, key, value)
+
+    session.add(db_client_profile)
+    try:
+        session.commit()
+        session.refresh(db_client_profile)
+        # Refresh current_user as well, as its client_profile attribute might be a cached version
+        # or to ensure any ORM magic related to the session updates the parent object.
+        session.refresh(current_user)
+    except Exception as e:
+        session.rollback()
+        # In a real app, log 'e' properly
+        print(f"Error updating profile: {e}") # Basic logging
+        raise HTTPException(status_code=500, detail="Error updating profile.")
+
+    return current_user
+
+@my_profile_router.delete("/profile-image", response_model=UserReadWithClientProfile)
+async def delete_my_profile_image(
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    db_client_profile = current_user.client_profile
+
+    if not db_client_profile:
+        # Should not happen if profile is auto-created with user
+        raise HTTPException(status_code=404, detail="ClientProfile not found for current user.")
+
+    if not db_client_profile.profile_image_url:
+        # No image to delete, operation is idempotent.
+        return current_user
+
+    image_file_path = db_client_profile.profile_image_url.lstrip('/')
+
+    if os.path.exists(image_file_path):
+        try:
+            os.remove(image_file_path)
+        except Exception as e:
+            # Log this error but proceed to nullify DB entry
+            print(f"Error deleting image file {image_file_path}: {e}")
+
+    db_client_profile.profile_image_url = None # Set to None in DB
+
+    session.add(db_client_profile)
+    try:
+        session.commit()
+        session.refresh(db_client_profile)
+        session.refresh(current_user) # Refresh user to update its client_profile relationship
+    except Exception as e:
+        session.rollback()
+        # Log error e
+        # Potentially an inconsistent state if file was deleted but DB update failed.
+        print(f"Error updating profile after image deletion: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating profile after image deletion.")
+
+    return current_user
+
+@my_profile_router.post("/profile-image", response_model=UserReadWithClientProfile)
+async def upload_my_profile_image(
+    image: UploadFile = File(...), # '...' makes it required
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    db_client_profile = current_user.client_profile
+    if not db_client_profile:
+        # If profile doesn't exist, create one. This is different from admin endpoint.
+        # User should always have a profile to update image for.
+        # This logic assumes profile is auto-created with user. If not, this might need adjustment
+        # or a check earlier in get_current_active_user if profile is essential for an "active" session.
+        # For now, matching the admin logic: if profile doesn't exist, it's an issue.
+        raise HTTPException(status_code=404, detail="ClientProfile not found for current user. Please contact support if this persists.")
+
+    # Validate image type
+    allowed_content_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if image.content_type not in allowed_content_types:
+        raise HTTPException(status_code=400, detail="Invalid image type. Allowed: JPEG, PNG, GIF, WebP.")
+
+    upload_dir = "static/profile_images"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    # Remove old image if it exists
+    if db_client_profile.profile_image_url:
+        old_image_path = db_client_profile.profile_image_url.lstrip('/')
+        if os.path.exists(old_image_path):
+            try:
+                os.remove(old_image_path)
+            except OSError as e:
+                print(f"Error deleting old profile image {old_image_path}: {e}") # Log error
+
+    # Sanitize filename and create a unique name
+    filename_prefix = str(uuid.uuid4())
+    original_filename_parts = image.filename.split('.')
+    original_extension = ""
+    if len(original_filename_parts) > 1:
+        original_extension = original_filename_parts[-1].lower() # Ensure extension is lower case
+        if original_extension not in ["jpg", "jpeg", "png", "gif", "webp"]: # Basic check on extension
+             raise HTTPException(status_code=400, detail="Invalid image file extension.")
+    else: # No extension found
+        raise HTTPException(status_code=400, detail="Image filename must have an extension.")
+
+    safe_filename = f"{filename_prefix}_{current_user.id}.{original_extension}"
+    file_path = os.path.join(upload_dir, safe_filename)
+
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+    except Exception as e:
+        print(f"Could not save image: {e}") # Log error
+        raise HTTPException(status_code=500, detail=f"Could not save image.")
+    finally:
+        image.file.close() # Ensure file is closed
+
+    db_client_profile.profile_image_url = f"/{file_path}" # Store with leading slash
+
+    session.add(db_client_profile)
+    try:
+        session.commit()
+        session.refresh(db_client_profile)
+        session.refresh(current_user) # Refresh user to update its client_profile relationship
+    except Exception as e:
+        session.rollback()
+        print(f"Error updating profile image in DB: {e}") # Log error
+        # If commit fails, attempt to delete the just-uploaded file
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError as e_remove:
+                 print(f"Failed to remove partially uploaded file {file_path}: {e_remove}")
+        raise HTTPException(status_code=500, detail=f"Error updating profile image in DB.")
+
+    return current_user
+
+# Endpoints for my_profile_router will be added in subsequent steps.
+# For now, just including the router in the app.
+app.include_router(my_profile_router)
+
+
+# --- User Specific Data Router (e.g., Sales History) ---
+user_data_router = APIRouter(
+    prefix="/api/users",
+    tags=["User Data"]
+    # Consider adding dependencies=[Depends(get_current_active_user)] if all routes here are protected
+)
+
+from .database import Sale, SaleRead # Ensure SaleRead is imported
+
+@user_data_router.get("/{user_id}/sales/", response_model=List[SaleRead])
+async def get_user_sales_history(
+    user_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user), # For authorization
+    skip: int = 0,
+    limit: int = 100
+):
+    # Authorization: Admin can see any user's sales. Regular user can only see their own.
+    if not current_user.is_superuser and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this resource")
+
+    # Check if the target user exists
+    target_user = session.get(User, user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    sales_query = select(Sale).where(Sale.user_id == user_id).offset(skip).limit(limit)
+    sales_history = session.exec(sales_query).all()
+
+    # Sale model instances should be directly compatible with SaleRead if fields match
+    return sales_history
+
+app.include_router(user_data_router)

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Compras - Showroom Natura OjitOs</title> <!-- Will be updated by JS -->
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <a href="index.html">Showroom Natura OjitOs</a>
+        </div>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+            <a href="products.html" class="nav-link">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <span id="user-greeting" style="display:none;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">🌙</button>
+    </header>
+
+    <main class="page-container client-history-container">
+        <div id="client-info-header" class="card-like" style="margin-bottom: 20px; padding: 15px;">
+            <h1 id="page-main-title">Historial de Compras</h1>
+            <p><strong>Cliente:</strong> <span id="history-client-name">-</span></p>
+            <p><strong>Email:</strong> <span id="history-client-email">-</span></p>
+        </div>
+
+        <section class="sales-history-section card-like">
+            <h2>Detalle de Ventas</h2>
+            <div id="sales-history-table-placeholder">
+                <table id="sales-history-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID Venta</th>
+                            <th>Fecha</th>
+                            <th>Monto Total</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-history-table-body">
+                        <!-- Sales rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="page-actions" style="margin-top: 20px; text-align: center;">
+            <a href="admin_clients.html" class="mdc-button mdc-button--outlined">Volver a Lista de Clientes</a>
+        </div>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Showroom Natura OjitOs</p>
+    </footer>
+
+    <script src="js/auth.js"></script>
+    <script src="js/admin_client_history.js"></script>
+    <script>
+        // Page Protection
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!isLoggedIn()) { // isLoggedIn() is from auth.js
+                window.location.href = 'login.html';
+                return; // Stop further execution if not logged in
+            }
+            // updateAuthUI() is called by auth.js's own DOMContentLoaded listener
+            // Future check for admin role can be added here:
+            // if (!userIsAdmin()) { // Assuming a function userIsAdmin() that checks token or fetches user role
+            //     alert("Acceso denegado. Esta página es solo para administradores.");
+            //     window.location.href = 'index.html'; // Redirect to a safe page
+            // }
+        });
+    </script>
+</body>
+</html>

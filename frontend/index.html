@@ -11,11 +11,16 @@
 <body>
     <header>
         <nav>
-            <!-- Current page might not need a link to itself, or could be styled differently -->
-            <!-- <a href="index.html" class="nav-link">Dashboard</a> -->
+            <a href="index.html" class="nav-link">Dashboard</a>
             <a href="products.html" class="nav-link">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
+            <!-- Auth-dependent links -->
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <span id="user-greeting" style="display:none; margin-left: auto; margin-right: 10px;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
         </nav>
-        <button id="theme-toggle-button" aria-label="Toggle dark mode">Toggle Theme</button>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">Toggle Theme</button> <!-- Theme button might be better inside nav or styled consistently -->
     </header>
     <main class="dashboard-container">
         <section class="card-section">
