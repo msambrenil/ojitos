@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración de Clientes - Showroom Natura OjitOs</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"> <!-- FontAwesome -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+            <a href="products.html" class="nav-link">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a> <!-- Link to self for consistency -->
+            <!-- Auth-dependent links -->
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <span id="user-greeting" style="display:none; margin-left: auto; margin-right: 10px;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">Toggle Theme</button>
+    </header>
+
+    <main class="admin-clients-container">
+        <h1>Administración de Clientes</h1>
+
+        <section class="filters-section client-filters">
+            <h2>Filtros y Búsqueda</h2>
+            <div id="admin-client-filter-controls" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-bottom: 20px;">
+                <div class="form-field-group" style="flex-grow: 2;">
+                    <label for="admin-client-search">Buscar por Nombre/Email:</label>
+                    <input type="text" id="admin-client-search" name="admin_client_search" placeholder="Escribe nombre o email...">
+                </div>
+                <div class="form-field-group" style="flex-grow: 1;">
+                    <label for="admin-client-level-filter">Nivel de Cliente:</label>
+                    <select id="admin-client-level-filter" name="admin_client_level_filter">
+                        <option value="">Todos los Niveles</option>
+                        <option value="Plata">Plata</option>
+                        <option value="Diamante">Diamante</option>
+                    </select>
+                </div>
+                <div class="form-field-group" style="flex-grow: 1;">
+                    <label for="admin-client-status-filter">Estado:</label>
+                    <select id="admin-client-status-filter" name="admin_client_status_filter">
+                        <option value="">Todos los Estados</option>
+                        <option value="true">Activo</option>
+                        <option value="false">Inactivo</option>
+                    </select>
+                </div>
+                <div class="form-actions filter-actions" style="padding-top:0; margin-left:5px;"> <!-- Adjusted margin for button alignment -->
+                    <button type="button" id="admin-apply-client-filters-button" class="mdc-button">Aplicar Filtros</button>
+                    <button type="button" id="admin-clear-client-filters-button" class="mdc-button mdc-button--outlined">Limpiar Filtros</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="client-list-section">
+            <h2>Lista de Clientes</h2>
+            <div id="admin-client-table-placeholder">
+                <table id="admin-client-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID Usuario</th>
+                            <th>Nombre Completo</th>
+                            <th>Email</th>
+                            <th>Apodo</th>
+                            <th>WhatsApp</th>
+                            <th>Nivel Cliente</th>
+                            <th>Activo</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-client-table-body">
+                        <!-- Client rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <div id="admin-edit-client-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-modal-button" id="admin-client-modal-close-button">&times;</span>
+                <h3 id="admin-client-modal-title">Editar Perfil de Cliente</h3>
+                <form id="admin-client-edit-form">
+                    <input type="hidden" id="admin-form-user-id" name="user_id">
+
+                    <div class="form-field-group">
+                        <label for="admin-form-fullname">Nombre Completo:</label>
+                        <input type="text" id="admin-form-fullname" name="full_name" readonly>
+                    </div>
+                    <div class="form-field-group">
+                        <label for="admin-form-email">Email:</label>
+                        <input type="email" id="admin-form-email" name="email" readonly>
+                    </div>
+                    <div class="form-field-group">
+                        <label for="admin-form-nickname">Apodo:</label>
+                        <input type="text" id="admin-form-nickname" name="nickname">
+                    </div>
+                    <div class="form-field-group">
+                        <label for="admin-form-whatsapp">WhatsApp:</label>
+                        <input type="text" id="admin-form-whatsapp" name="whatsapp_number">
+                    </div>
+                    <div class="form-field-group">
+                        <label for="admin-form-gender">Género:</label>
+                        <select id="admin-form-gender" name="gender">
+                            <option value="">Seleccionar...</option>
+                            <option value="Femenino">Femenino</option>
+                            <option value="Masculino">Masculino</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-field-group">
+                        <label for="admin-form-client-level">Nivel de Cliente:</label>
+                        <select id="admin-form-client-level" name="client_level">
+                            <option value="Plata">Plata</option>
+                            <option value="Diamante">Diamante</option>
+                            <!-- Add other levels as they become defined -->
+                        </select>
+                    </div>
+                    <div class="form-field-group">
+                        <label for="admin-form-profile-image">Imagen de Perfil:</label>
+                        <input type="file" id="admin-form-profile-image" name="profile_image" accept="image/*">
+                        <div id="admin-current-profile-image-preview">
+                            <!-- Preview of current image -->
+                        </div>
+                        <button type="button" id="admin-remove-profile-image-button" class="mdc-button" style="display:none; margin-top: 5px;">Eliminar Imagen Actual</button>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="mdc-button mdc-button--raised">Guardar Cambios</button>
+                        <button type="button" class="mdc-button cancel-modal-button" id="admin-client-modal-cancel-button">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.js"></script>
+    <script src="js/app.js" defer></script>
+    <script src="js/admin_clients.js" defer></script>
+</body>
+</html>

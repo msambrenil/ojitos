@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Showroom Natura OjitOs</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container"> <!-- Added for structure, can be styled later -->
+            <a href="index.html" style="text-decoration: none; color: inherit; font-weight: bold; font-size: 1.2em;">Showroom Natura OjitOs</a>
+        </div>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+            <a href="products.html" class="nav-link">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <span id="user-greeting" style="display:none; margin-left: auto; margin-right: 10px;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">🌙</button>
+    </header>
+
+    <main class="login-container auth-form-container">
+        <h1>Iniciar Sesión</h1>
+        <form id="login-form" class="styled-form">
+            <div class="form-field-group">
+                <label for="login-email">Email:</label>
+                <input type="email" id="login-email" name="email" required>
+            </div>
+            <div class="form-field-group">
+                <label for="login-password">Contraseña:</label>
+                <input type="password" id="login-password" name="password" required>
+            </div>
+            <div id="login-error-message" class="error-message" style="display: none;"></div>
+            <div class="form-actions">
+                <button type="submit" class="mdc-button mdc-button--raised">Iniciar Sesión</button>
+            </div>
+        </form>
+        <p class="auth-switch-prompt">¿No tienes cuenta? <a href="register.html">Regístrate aquí</a></p>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Showroom Natura OjitOs</p>
+    </footer>
+
+    <script src="js/auth.js"></script>
+    <!-- <script src="js/app.js" defer></script> app.js handles global UI updates based on auth state via auth.js -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // auth.js should have already run its DOMContentLoaded listener to update header UI.
+            // This script focuses on the login form specific to this page.
+
+            const loginForm = document.getElementById('login-form');
+            const errorMessageDiv = document.getElementById('login-error-message');
+
+            if (loginForm) {
+                loginForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    if(errorMessageDiv) {
+                        errorMessageDiv.style.display = 'none';
+                        errorMessageDiv.textContent = '';
+                    }
+
+                    const emailInput = document.getElementById('login-email');
+                    const passwordInput = document.getElementById('login-password');
+
+                    const email = emailInput.value;
+                    const password = passwordInput.value;
+
+                    if (!email || !password) {
+                        if(errorMessageDiv) {
+                            errorMessageDiv.textContent = 'Por favor, ingresa email y contraseña.';
+                            errorMessageDiv.style.display = 'block';
+                        }
+                        return;
+                    }
+
+                    try {
+                        // login() function is from auth.js, which handles storing token
+                        // and redirecting on success.
+                        const loginSuccessful = await login(email, password);
+
+                        if (!loginSuccessful) {
+                            // If login() returns false, it means an error occurred that it handled internally
+                            // (e.g., network error, or specific error it chose not to throw but return false for).
+                            // The login() function itself logs details to console.
+                            // We display a generic message here if not already handled by a thrown error.
+                            if(errorMessageDiv && !errorMessageDiv.textContent) { // Avoid overwriting specific error from throw
+                                errorMessageDiv.textContent = 'Error al iniciar sesión. Verifica tus credenciales.';
+                                errorMessageDiv.style.display = 'block';
+                            }
+                        }
+                        // Redirection to my_profile.html or index.html is handled within login() upon success.
+                    } catch (error) {
+                        // This catches errors thrown by login() (e.g., from response.ok check)
+                        if(errorMessageDiv) {
+                            errorMessageDiv.textContent = error.message || 'Error al iniciar sesión. Intenta de nuevo.';
+                            errorMessageDiv.style.display = 'block';
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

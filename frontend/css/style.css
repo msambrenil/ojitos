@@ -38,15 +38,37 @@ header {
     padding: 10px 20px;
     display: flex;
     align-items: center; /* Vertically align items in header */
-    justify-content: space-between; /* Pushes nav and button to opposite ends */
+    /* justify-content: space-between; /* This will be handled by nav's flex properties now */
     border-bottom: 1px solid var(--card-border-color);
     margin-bottom: 20px;
 }
 
 header nav {
-    /* margin-left: auto; Pushes nav to the right if justify-content is flex-start */
-    /* No specific style needed if header uses space-between */
+    display: flex; /* Make nav a flex container */
+    align-items: center; /* Align nav items vertically */
+    flex-grow: 1; /* Allow nav to take available space */
+    flex-wrap: wrap; /* Allow nav items to wrap on smaller screens */
 }
+
+#user-greeting {
+    margin-left: auto; /* Pushes greeting and logout button to the right */
+    margin-right: 10px;
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+#nav-logout-button.nav-link { /* Ensure it behaves like other nav-links but can be styled as button */
+    padding: 5px 10px; /* Adjust padding for button-like appearance */
+    border: 1px solid var(--button-border-color);
+    background-color: transparent; /* Or var(--button-background-color) if preferred */
+    cursor: pointer;
+}
+#nav-logout-button.nav-link:hover {
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    text-decoration: none; /* Remove underline on hover for button-like links */
+}
+
 
 .nav-link {
     margin: 0 10px;
@@ -265,6 +287,25 @@ header nav {
     }
     #theme-toggle-button {
         align-self: flex-start; /* Align button to start */
+        margin-left: 0; /* Reset margin if header is column */
+        margin-top: 10px; /* Add space if stacked */
+    }
+    header nav {
+        /* On small screens, nav items might stack or wrap differently. */
+        /* Let's ensure greeting and logout still attempt to stay grouped if possible */
+        /* or stack cleanly. */
+        gap: 5px; /* Reduce gap for nav items if they wrap */
+    }
+    #user-greeting {
+        margin-left: 0; /* Reset margin for stacked layout */
+        margin-right: 0;
+        display: block; /* Make it full width for stacking */
+        text-align: center; /* Center if stacked */
+        padding: 5px 0;
+    }
+    #nav-logout-button.nav-link {
+        width: 100%; /* Make logout button full width if stacked */
+        text-align: center;
     }
 }
 
@@ -480,6 +521,38 @@ body.dark-mode .delete-product-button {
 /* For simplicity, if not set, box-shadow might use a fixed color or a slightly less dynamic approach */
 } /* This closing brace was missing in the previous thought process, but is present in the file. Important to keep it. */
 
+/* Styling for Admin Client Management Page */
+.admin-clients-container .filters-section, /* Alias client-filters if specific styling needed */
+.admin-clients-container .client-list-section {
+    /* Uses existing .filters-section and .product-list-section styles by default */
+    /* Add specific overrides if .admin-clients-container requires different layout */
+}
+
+#admin-current-profile-image-preview img {
+    max-width: 100px;
+    max-height: 70px;
+    border-radius: 4px;
+    border: 1px solid var(--card-border-color);
+    margin-top: 5px;
+    display: block; /* Ensure it's block for margin auto or other block behaviors */
+}
+
+#admin-remove-profile-image-button {
+    font-size: 0.8em;
+    padding: 4px 8px; /* Smaller padding */
+    margin-top: 8px;
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    border: 1px solid var(--card-border-color);
+    border-radius:3px;
+    cursor:pointer;
+    display: inline-block; /* Allow it to sit nicely */
+}
+#admin-remove-profile-image-button:hover {
+    opacity: 0.85;
+}
+
+
 /* --- Sticky Filters Section --- */
 .filters-section {
     /* Existing styles like width, max-width, padding, background-color, border, border-radius, box-shadow are applied first */
@@ -565,4 +638,236 @@ body.dark-mode .filters-section {
     #filter-controls {
         gap: 10px;
     }
+}
+
+/* WhatsApp icon styling */
+.fa-whatsapp {
+    color: #25D366; /* Official WhatsApp green */
+    margin-left: 5px;
+}
+td a .fa-whatsapp { /* Ensure icon in table cell link is slightly larger if needed */
+    font-size: 1.1em;
+}
+
+/* --- Authentication Form Styles --- */
+.auth-form-container {
+    max-width: 450px;
+    margin: 40px auto; /* More margin from top */
+    padding: 30px;
+    background-color: var(--card-background-color); /* Use card bg for consistent theming */
+    border: 1px solid var(--card-border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 15px var(--card-shadow-color); /* Use theme variable for shadow */
+    text-align: center;
+}
+
+body.dark-mode .auth-form-container {
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4); /* Darker shadow for dark mode */
+}
+
+.auth-form-container h1 {
+    margin-bottom: 25px;
+    color: var(--text-color);
+    font-weight: 700; /* Bolder h1 */
+}
+
+.styled-form .form-field-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+/* General label styling was already in form-field-group, ensuring it applies */
+.styled-form label {
+    /* display: block; */ /* Already in .form-field-group > label */
+    /* margin-bottom: 8px; */ /* Already in .form-field-group > label */
+    /* font-weight: bold; */ /* Already in .form-field-group > label */
+    /* color: var(--text-color-secondary); */ /* Define or use var(--text-color) */
+    color: var(--text-color); /* Using main text color for now */
+    opacity: 0.9;
+}
+
+/* General input styling was already in form-field-group, ensuring it applies */
+.styled-form input[type="email"],
+.styled-form input[type="password"],
+.styled-form input[type="text"],
+.styled-form input[type="number"],
+.styled-form textarea {
+    width: 100%;
+    /* padding, border, radius, background, color, font, box-sizing, transition */
+    /* are inherited from existing .form-field-group input styles */
+}
+
+.error-message {
+    color: var(--error-color, #D32F2F);
+    background-color: var(--error-background-color, rgba(211, 47, 47, 0.1));
+    padding: 12px 15px; /* Increased padding */
+    border-radius: 4px;
+    margin-bottom: 20px; /* More space below error */
+    border: 1px solid var(--error-border-color, #D32F2F); /* Use a new var or error-color */
+    text-align: left;
+    font-size: 0.9em;
+}
+
+.auth-switch-prompt {
+    margin-top: 25px; /* More space above prompt */
+    font-size: 0.95em; /* Slightly larger prompt text */
+    color: var(--text-color);
+    opacity: 0.9;
+}
+
+.auth-switch-prompt a {
+    color: var(--link-color); /* Use theme variable for link */
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.auth-switch-prompt a:hover {
+    text-decoration: underline;
+}
+
+/* Ensure footer is styled (basic) */
+footer {
+    text-align: center;
+    padding: 20px;
+    margin-top: 40px;
+    color: var(--text-color);
+    opacity: 0.7;
+    font-size: 0.9em;
+    border-top: 1px solid var(--card-border-color);
+}
+
+/* Logo container in header */
+.logo-container a {
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: bold;
+    font-size: 1.3em; /* Make logo/site name a bit larger */
+}
+/* Adjust header for logo */
+header {
+    justify-content: space-between; /* Ensure this is set if logo is on left, nav+theme on right */
+}
+header .logo-container {
+    /* No specific style needed if nav has flex-grow and user-greeting pushes to right */
+    /* If nav doesn't take all space, might need to adjust this or nav's flex properties */
+}
+
+/* Redefine root variables for error and primary colors if not globally set */
+:root {
+    /* ... existing vars ... */
+    --error-color: #D32F2F;
+    --error-background-color: rgba(211, 47, 47, 0.1);
+    --error-border-color: #D32F2F;
+    --primary-color: #007bff; /* Example primary color, adjust as needed */
+    --text-color-secondary: #555555;
+}
+
+body.dark-mode {
+    /* ... existing vars ... */
+    --error-color: #E57373; /* Lighter red for dark mode */
+    --error-background-color: rgba(229, 115, 115, 0.15);
+    --error-border-color: #E57373;
+    --primary-color: #64b5f6; /* Lighter blue for dark mode */
+    --text-color-secondary: #aaaaaa;
+}
+
+/* --- My Profile Page Styles --- */
+.profile-container {
+    max-width: 900px;
+    margin: 20px auto;
+    padding: 0 20px 20px 20px; /* Adjusted to match .dashboard-container etc. */
+}
+
+.profile-section {
+    margin-bottom: 30px;
+    padding: 25px; /* Slightly more padding for sections */
+    background-color: var(--card-background-color); /* Using card-like appearance */
+    border: 1px solid var(--card-border-color);
+    border-radius: 8px;
+    box-shadow: 0 2px 5px var(--card-shadow-color); /* Using card-like shadow */
+}
+
+body.dark-mode .profile-section {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3); /* Slightly enhanced shadow for dark mode sections */
+}
+
+.profile-section h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--card-border-color);
+    color: var(--text-color); /* Ensure heading color matches theme */
+}
+
+#profile-data-view p {
+    margin-bottom: 10px;
+    font-size: 1.05em; /* Slightly larger font for display */
+    color: var(--text-color);
+}
+#profile-data-view p strong {
+    font-weight: 600; /* Make labels a bit bolder */
+    margin-right: 8px;
+    color: var(--text-color-secondary); /* Dimmer color for labels */
+}
+
+
+#current-profile-image-display {
+    text-align: center;
+    margin-bottom: 20px; /* More space below image */
+}
+
+#current-profile-image {
+    max-width: 150px;
+    max-height: 150px;
+    border-radius: 50%; /* Make it circular */
+    object-fit: cover;
+    border: 3px solid var(--card-border-color);
+    background-color: var(--background-color);
+    box-shadow: 0 2px 4px var(--card-shadow-color); /* Add a little shadow to the image */
+}
+
+/* Ensure form-actions and error-message styles from auth forms apply if structure is same */
+.profile-section .form-actions { /* Specificity if needed */
+    margin-top: 25px; /* More space before actions in these forms */
+}
+
+/* Ensure placeholder text in spans is visible if data is missing */
+#profile-data-view span {
+    color: var(--text-color); /* Default color */
+    font-style: italic; /* Italicize if it's a placeholder like '-' */
+}
+#profile-data-view span:not(:empty) { /* When populated, remove italic */
+    /* font-style: normal; /* This might be too broad, handle in JS if needed */
+}
+
+/* --- Admin Client Sales History Page Styles --- */
+#client-info-header {
+    /* .card-like class is already applied in HTML, providing base style */
+    margin-bottom: 25px; /* Ensure good spacing from the table below */
+    padding: 20px; /* Ensure consistent padding */
+}
+
+#client-info-header h1#page-main-title {
+    font-size: 1.8em;
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: var(--text-color);
+    text-align: left; /* Override general h1 centering if needed */
+}
+
+#client-info-header p {
+    margin: 8px 0;
+    font-size: 1em;
+    line-height: 1.5;
+}
+
+#client-info-header p strong { /* Label part, e.g., "Cliente:" */
+    font-weight: 600;
+    color: var(--text-color);
+    margin-right: 8px;
+}
+
+#client-info-header p span { /* Value part, e.g., client's actual name */
+    color: var(--text-color-secondary);
+    font-style: normal; /* Ensure values are not italic if spans are globally italic for placeholders */
 }

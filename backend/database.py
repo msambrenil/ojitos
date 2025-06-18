@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, Any, Dict
 
 from sqlalchemy import create_engine
-from sqlmodel import Field, Session, SQLModel
+from sqlmodel import Field, Session, SQLModel, Relationship # Added Relationship
 from pydantic import model_validator
 
 
@@ -17,17 +17,69 @@ def create_db_and_tables():
 
 # User Models
 class UserBase(SQLModel):
-    username: str = Field(index=True, unique=True)
-    email: str = Field(unique=True)
+    email: str = Field(unique=True, index=True) # Changed username to email as primary identifier
     full_name: Optional[str] = None
-    disabled: bool = False
+    is_active: bool = True
+    is_superuser: bool = False
+    # Removed: username, disabled
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     hashed_password: str
 
-class UserCreate(UserBase):
+    client_profile: Optional["ClientProfile"] = Relationship(back_populates="user")
+    sales: List["Sale"] = Relationship(back_populates="user_as_client") # Changed from "user" to avoid conflict if Sale.user is also a field
+
+class UserCreate(UserBase): # For user creation, password is required
     password: str
+
+class UserRead(UserBase): # Basic User info for reading
+    id: int
+
+# Forward reference for ClientProfileRead used in UserReadWithClientProfile
+class ClientProfileRead(SQLModel): # Define structure first
+    id: int
+    user_id: int
+    nickname: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    gender: Optional[str] = None
+    client_level: str = "Plata"
+    profile_image_url: Optional[str] = None
+
+class UserReadWithClientProfile(UserRead): # Richer user representation
+    client_profile: Optional[ClientProfileRead] = None
+
+
+# --- ClientProfile Models ---
+class ClientProfileBase(SQLModel):
+    nickname: Optional[str] = None
+    whatsapp_number: Optional[str] = Field(default=None, index=True)
+    gender: Optional[str] = None  # Consider using an Enum later
+    client_level: str = Field(default="Plata") # Default to "Plata"
+    profile_image_url: Optional[str] = None
+
+class ClientProfile(ClientProfileBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True) # Ensures one-to-one
+
+    user: User = Relationship(back_populates="client_profile")
+
+class ClientProfileCreate(ClientProfileBase):
+    user_id: int # Required when creating a profile
+
+class ClientProfileUpdate(SQLModel): # All fields optional for PATCH-like behavior
+    nickname: Optional[str] = None
+    whatsapp_number: Optional[str] = None
+    gender: Optional[str] = None
+    client_level: Optional[str] = None
+    profile_image_url: Optional[str] = None
+
+# Re-define ClientProfileRead here if it needs to inherit from ClientProfileBase
+# to pick up fields correctly. The forward reference above was just for UserReadWithClientProfile.
+class ClientProfileRead(ClientProfileBase): # Now inherits from ClientProfileBase
+    id: int
+    user_id: int
+    # nickname, whatsapp_number, etc. are inherited from ClientProfileBase
 
 
 # --- Product Models ---
@@ -109,14 +161,32 @@ class Client(SQLModel, table=True):
     phone: Optional[str] = None
 
 
-# Sale Model
-class Sale(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    client_id: int = Field(foreign_key="client.id")
+# Sale Model (Updated)
+class SaleBase(SQLModel):
     sale_date: datetime = Field(default_factory=datetime.utcnow)
     total_amount: float
     status: str  # e.g., "Por Armar", "A Entregar", "Entregada", "Cobrada"
 
-# Note: To establish relationships like Sale referencing Client,
-# you might need to add Relationship attributes from SQLModel later on if you build out ORM features.
-# For now, client_id: int = Field(foreign_key="client.id") sets up the foreign key constraint at DB level.
+class Sale(SaleBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True) # Renamed from client_id, linked to User, indexed
+
+    # Relationship to User (as the client who made the purchase)
+    user_as_client: Optional[User] = Relationship(back_populates="sales")
+    # If you also need to track which user (e.g. salesperson) registered the sale,
+    # you would add another field like `registered_by_user_id` and another relationship.
+
+class SaleRead(SaleBase):
+    id: int
+    user_id: int # Changed from client_id to match Sale model
+
+# Note: The existing Client model might be for something else, or might be redundant if users are always clients.
+# For now, focusing on Sale being linked to User via user_id.
+
+
+# --- User's Own Profile Update Schema ---
+class MyProfileUpdate(SQLModel):
+    nickname: Optional[str] = Field(default=None)
+    whatsapp_number: Optional[str] = Field(default=None) # Consider adding validation for phone numbers later
+    gender: Optional[str] = Field(default=None)
+    # Excludes client_level (managed by admin) and profile_image_url (managed by separate endpoint)
