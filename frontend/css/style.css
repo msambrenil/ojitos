@@ -37,9 +37,29 @@ header {
     background-color: var(--header-background);
     padding: 10px 20px;
     display: flex;
-    justify-content: flex-end; /* Align button to the right */
+    align-items: center; /* Vertically align items in header */
+    justify-content: space-between; /* Pushes nav and button to opposite ends */
     border-bottom: 1px solid var(--card-border-color);
     margin-bottom: 20px;
+}
+
+header nav {
+    /* margin-left: auto; Pushes nav to the right if justify-content is flex-start */
+    /* No specific style needed if header uses space-between */
+}
+
+.nav-link {
+    margin: 0 10px;
+    text-decoration: none;
+    color: var(--text-color);
+    font-weight: bold;
+    font-size: 1em; /* Ensure it's not too large or small */
+    transition: color 0.2s ease-in-out;
+}
+
+.nav-link:hover, .nav-link:focus {
+    text-decoration: underline;
+    color: var(--link-color); /* Use existing link color for hover */
 }
 
 #theme-toggle-button {
@@ -57,12 +77,56 @@ header {
     opacity: 0.9;
 }
 
-.dashboard-container {
-    padding: 0 20px 20px 20px; /* Add padding here instead of body */
+.dashboard-container, .products-container {
+    padding: 0 20px 20px 20px;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: center; /* Center content like h1, sections */
 }
+
+.products-container h1, .products-container h2 {
+    text-align: center; /* Center titles within products page */
+    width: 100%;
+}
+
+.filters-section, .add-product-section, .product-list-section {
+    width: 100%;
+    max-width: 1200px; /* Consistent max-width with dashboard */
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: var(--card-background-color); /* Use card bg for sections */
+    border: 1px solid var(--card-border-color);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px var(--card-shadow-color);
+}
+
+.add-product-section {
+    text-align: center; /* Center the button */
+}
+
+/* Basic styling for mdc-button if library isn't fully providing it */
+.mdc-button {
+    padding: 10px 20px;
+    font-family: 'Comfortaa', cursive;
+    border-radius: 4px;
+    cursor: pointer;
+    text-transform: uppercase; /* Common for Material buttons */
+    font-weight: bold;
+    border: 1px solid var(--button-border-color);
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.mdc-button--raised {
+    box-shadow: 0 2px 4px var(--card-shadow-color);
+}
+
+.mdc-button:hover {
+    opacity: 0.9;
+    box-shadow: 0 3px 6px var(--card-shadow-color);
+}
+
 
 .card-section {
     display: flex;
@@ -109,6 +173,47 @@ header {
     text-align: right; /* Align value to the right */
 }
 
+/* Modal Styles */
+.modal {
+    /* display: none; /* Hidden by default - controlled by inline style or JS */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4); /* Semi-transparent background */
+}
+
+.modal-content {
+    background-color: var(--card-background-color); /* Use theme variable */
+    color: var(--text-color); /* Use theme variable */
+    margin: 10% auto;
+    padding: 20px;
+    border: 1px solid var(--card-border-color); /* Use theme variable */
+    width: 80%;
+    max-width: 700px;
+    border-radius: 8px;
+    position: relative; /* For positioning close button */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.close-modal-button {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: color 0.2s ease-in-out;
+}
+
+.close-modal-button:hover {
+    color: var(--link-color); /* Or a specific close button hover color */
+}
+
 /*
    The .mdc-card styling from previous steps might conflict or be redundant.
    For now, custom .card styling with CSS variables will take precedence.
@@ -127,6 +232,9 @@ header {
                                   /* Let's adjust to calc(50% - 10px) as gap is distributed. */
         width: calc(50% - 10px); /* Each card takes 50% minus half the gap */
     }
+    .modal-content {
+        width: 70%;
+    }
 }
 
 /* Small screens (e.g., mobile phones) - cards stack vertically */
@@ -144,6 +252,20 @@ header {
     .card:last-child {
         margin-bottom: 0; /* No margin for the last card */
     }
+    .modal-content {
+        width: 90%;
+        margin: 15% auto; /* Adjust margin for smaller screens */
+    }
+    header {
+        flex-direction: column; /* Stack nav and button */
+        align-items: flex-start; /* Align items to start */
+    }
+    header nav {
+        margin-bottom: 10px; /* Space between nav and button */
+    }
+    #theme-toggle-button {
+        align-self: flex-start; /* Align button to start */
+    }
 }
 
 /* Very small screens - adjust font sizes and button padding */
@@ -158,11 +280,289 @@ header {
         padding: 8px 12px;
         font-size: 0.9em;
     }
-    .dashboard-container { /* Reduce padding on very small screens */
+    .dashboard-container, .products-container { /* Reduce padding on very small screens */
         padding: 0 10px 10px 10px;
     }
      header { /* Reduce padding on very small screens */
         padding: 8px 10px;
         margin-bottom: 10px;
+    }
+    .products-container h1 {
+        font-size: 1.8em;
+    }
+    .filters-section h2, .add-product-section h2, .product-list-section h2, #product-form-section h2 {
+        font-size: 1.3em;
+    }
+    .modal-content {
+        padding: 15px;
+        margin: 20% auto;
+    }
+}
+
+/* --- Product Table Styling --- */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    box-shadow: 0 1px 3px var(--card-shadow-color); /* Subtle shadow for the table */
+}
+
+.data-table th, .data-table td {
+    border: 1px solid var(--card-border-color);
+    padding: 10px 14px; /* Slightly more padding */
+    text-align: left;
+    vertical-align: middle;
+    font-size: 0.95em; /* Slightly adjust font size for table density */
+}
+
+.data-table th {
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    font-weight: bold;
+    text-transform: uppercase; /* Uppercase headers */
+    letter-spacing: 0.5px;
+}
+
+.data-table tbody tr:nth-child(even) {
+    background-color: rgba(0,0,0,0.02); /* Very subtle striping for light theme */
+}
+body.dark-mode .data-table tbody tr:nth-child(even) {
+    background-color: rgba(255,255,255,0.02); /* Very subtle striping for dark theme */
+}
+
+.data-table tbody tr:hover {
+    background-color: rgba(0,0,0,0.04);
+}
+body.dark-mode .data-table tbody tr:hover {
+    background-color: rgba(255,255,255,0.04);
+}
+
+
+/* Stock Alert Styling */
+.stock-alert-critical {
+    background-color: rgba(255, 0, 0, 0.10) !important; /* Light red for light theme */
+    /* font-weight: bold; Optional: make text bolder */
+}
+body.dark-mode .stock-alert-critical {
+    background-color: rgba(255, 82, 82, 0.20) !important; /* Slightly more prominent red for dark theme */
+    /* color: #ffcdd2 !important; /* Ensure text is light on dark red background */
+}
+/* Ensure text in critical rows is readable - might need to adjust if text color variable doesn't contrast well */
+/*.stock-alert-critical td {
+    color: var(--text-color);
+}*/
+
+
+/* Product Image Thumbnail Styling */
+.product-image-thumbnail {
+    max-width: 60px;
+    max-height: 60px;
+    min-width: 40px; /* Ensure a minimum size */
+    min-height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--card-border-color); /* Subtle border around image */
+}
+
+/* Action Buttons Styling (basic) */
+.edit-product-button, .delete-product-button {
+    padding: 6px 12px; /* Adjusted padding */
+    margin-right: 5px;
+    border: 1px solid var(--button-border-color); /* Use button border color */
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 0.85em; /* Slightly smaller font for action buttons */
+    text-transform: uppercase;
+    font-weight: 600;
+    transition: opacity 0.2s ease-in-out, background-color 0.2s ease-in-out;
+}
+
+.edit-product-button:hover, .delete-product-button:hover {
+    opacity: 0.85;
+}
+
+.delete-product-button {
+    /* Optionally make delete button visually distinct (e.g., red tones) */
+    /* background-color: #dc3545; */ /* Example: Bootstrap danger color */
+    /* border-color: #dc3545; */
+    /* color: white; */
+}
+body.dark-mode .delete-product-button {
+    /* background-color: #c82333; */
+    /* border-color: #bd2130; */
+}
+
+/* --- Product Form Styling --- */
+#product-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Space between form field groups */
+}
+
+.form-field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Space between label and input */
+}
+
+.form-field-group label {
+    font-weight: 600;
+    color: var(--text-color);
+    font-size: 0.9em;
+    margin-bottom: 2px; /* Small space below label */
+}
+
+.form-field-group input[type="text"],
+.form-field-group input[type="number"],
+.form-field-group input[type="file"],
+.form-field-group textarea {
+    width: 100%; /* Full width within their container */
+    padding: 10px;
+    border: 1px solid var(--card-border-color); /* Use consistent border */
+    border-radius: 4px;
+    background-color: var(--background-color); /* Match body background or a slightly lighter shade */
+    color: var(--text-color);
+    font-family: 'Comfortaa', cursive; /* Consistent font */
+    box-sizing: border-box; /* Ensure padding doesn't expand width */
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.form-field-group input[type="text"]:focus,
+.form-field-group input[type="number"]:focus,
+.form-field-group input[type="file"]:focus,
+.form-field-group textarea:focus {
+    border-color: var(--link-color); /* Highlight focus with link color */
+    box-shadow: 0 0 0 2px rgba(var(--link-color-rgb, 0,123,255), 0.25); /* Use RGB if link-color is hex, or a fixed shadow color */
+                                                                    /* Assuming --link-color: #007bff; then --link-color-rgb: 0,123,255 */
+}
+
+.form-field-group textarea {
+    resize: vertical; /* Allow vertical resize */
+    min-height: 60px;
+}
+
+#current-image-preview img {
+    max-width: 100px;
+    max-height: 70px;
+    border-radius: 4px;
+    border: 1px solid var(--card-border-color);
+    margin-top: 5px;
+}
+#current-image-preview p {
+    font-size: 0.9em;
+    color: var(--text-color);
+    opacity: 0.8;
+    margin: 5px 0;
+}
+
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end; /* Align buttons to the right */
+    gap: 10px; /* Space between buttons */
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--card-border-color);
+}
+
+/* Ensure modal content is scrollable if form is long */
+.modal-content {
+    max-height: 85vh; /* Adjust as needed */
+    overflow-y: auto;
+}
+
+/* Add :root variable for link color rgb for box-shadow if not already present */
+/* Example, if --link-color is #007bff */
+/* :root { --link-color-rgb: 0,123,255; } */
+/* body.dark-mode { --link-color-rgb: 100,181,246; } /* Example for dark mode if link color changes */
+/* For simplicity, if not set, box-shadow might use a fixed color or a slightly less dynamic approach */
+} /* This closing brace was missing in the previous thought process, but is present in the file. Important to keep it. */
+
+/* --- Sticky Filters Section --- */
+.filters-section {
+    /* Existing styles like width, max-width, padding, background-color, border, border-radius, box-shadow are applied first */
+    /* Then, sticky properties are added/overridden: */
+    position: sticky;
+    top: 0;
+    z-index: 950;
+    margin-bottom: 0 !important; /* Override margin-bottom from general section style */
+    border-top-left-radius: 0; /* Remove top radius if it's flush against top */
+    border-top-right-radius: 0;
+    /* padding-top: 15px; */ /* Ensure padding is consistent */
+    /* padding-bottom: 15px; */
+    /* background-color is already var(--card-background-color) which should work with var(--background-color) of body */
+}
+
+body.dark-mode .filters-section {
+    /* box-shadow is already defined for .filters-section, dark mode might make it more subtle or need adjustment if body bg is very dark */
+    /* For now, existing shadow rules apply. If specific dark mode shadow for sticky is needed, add here. */
+}
+
+#filter-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 20px;
+}
+
+#filter-controls .form-field-group {
+    margin-bottom: 0; /* Remove individual margin from form-field-group if filters are horizontal */
+    flex-grow: 1;
+    min-width: 200px;
+}
+
+#filter-controls .form-field-group label {
+    font-size: 0.85em; /* Slightly smaller labels for filters */
+}
+
+
+#filter-controls input[type="text"] { /* Filter inputs might need slightly less padding if space is tight */
+    padding: 8px 10px;
+}
+
+.filter-actions {
+    /* .form-actions styles are already flex and right-aligned. We might want specific alignment for filters */
+    margin-top: 5px; /* Align with input fields if labels make them taller */
+    padding-top: 0;
+    border-top: none;
+    justify-content: flex-start;
+    flex-grow: 1; /* Allow this group to grow if needed */
+    align-self: flex-end; /* Align with other form groups */
+}
+
+/* Responsive adjustments for filter controls */
+@media (max-width: 768px) {
+    /* .filters-section might need top adjustment if a global mobile header becomes sticky too */
+    /* top: 50px; /* Example: if mobile header is 50px tall and sticky */
+
+    #filter-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    #filter-controls .form-field-group {
+        min-width: 0; /* Allow them to be full width */
+    }
+    .filter-actions {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around; /* Spread buttons on smaller screens */
+        margin-top: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .filter-actions button {
+        flex-grow: 1;
+        font-size: 0.9em;
+        padding: 8px 10px; /* Adjust button padding */
+    }
+    .filters-section {
+        padding: 10px 15px; /* Reduce padding of the filter section itself */
+    }
+    #filter-controls {
+        gap: 10px;
     }
 }
