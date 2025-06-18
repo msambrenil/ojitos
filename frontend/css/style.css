@@ -1,0 +1,168 @@
+:root {
+    --background-color: #f0f0f0; /* Was #FFFFFF, using light gray from original body */
+    --text-color: #333333; /* Was #000000, using card title color for general text */
+    --card-background-color: #ffffff; /* Was #FAFAFA or #ffffff */
+    --card-border-color: #dddddd; /* Was #EEEEEE */
+    --card-shadow-color: rgba(0,0,0,0.1);
+    --button-background-color: #e0e0e0;
+    --button-text-color: #000000;
+    --button-border-color: #cccccc;
+    --link-color: #007bff; /* Added for potential future links */
+    --header-background: #e9ecef; /* Added for header */
+}
+
+body.dark-mode {
+    --background-color: #121212;
+    --text-color: #e0e0e0; /* Lighter than pure white for better readability */
+    --card-background-color: #1e1e1e;
+    --card-border-color: #2c2c2c; /* Darker border */
+    --card-shadow-color: rgba(255,255,255,0.05); /* Lighter shadow for dark mode */
+    --button-background-color: #333333;
+    --button-text-color: #ffffff;
+    --button-border-color: #444444;
+    --link-color: #64b5f6; /* Lighter blue for dark mode links */
+    --header-background: #1f1f1f;
+}
+
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: 'Comfortaa', cursive;
+    margin: 0;
+    padding: 0; /* Header will manage its own padding */
+    transition: background-color 0.3s, color 0.3s;
+}
+
+header {
+    background-color: var(--header-background);
+    padding: 10px 20px;
+    display: flex;
+    justify-content: flex-end; /* Align button to the right */
+    border-bottom: 1px solid var(--card-border-color);
+    margin-bottom: 20px;
+}
+
+#theme-toggle-button {
+    background-color: var(--button-background-color);
+    color: var(--button-text-color);
+    border: 1px solid var(--button-border-color);
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 5px;
+    font-family: 'Comfortaa', cursive;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+}
+
+#theme-toggle-button:hover {
+    opacity: 0.9;
+}
+
+.dashboard-container {
+    padding: 0 20px 20px 20px; /* Add padding here instead of body */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.card-section {
+    display: flex;
+    flex-wrap: wrap; /* Allow cards to wrap to the next line on smaller screens */
+    justify-content: center; /* Center cards */
+    gap: 20px; /* Spacing between cards */
+    /* padding: 20px; Removed, dashboard-container handles padding */
+    width: 100%;
+    max-width: 1200px; /* Max width for the card section */
+}
+
+.card {
+    background-color: var(--card-background-color);
+    border: 1px solid var(--card-border-color); /* Added border */
+    border-radius: 8px; /* Rounded corners for cards */
+    box-shadow: 0 2px 4px var(--card-shadow-color); /* Subtle shadow for depth */
+    padding: 20px;
+    width: 200px; /* Fixed width for cards, adjust as needed */
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+    transition: box-shadow 0.3s ease, background-color 0.3s, border-color 0.3s; /* Smooth shadow transition on hover */
+}
+
+.card:hover {
+    box-shadow: 0 4px 8px var(--card-shadow-color); /* Enhanced shadow on hover */
+}
+
+.card-title {
+    font-family: 'Comfortaa', cursive;
+    font-size: 1.2em;
+    font-weight: 700; /* Bolder title */
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: var(--text-color); /* Use CSS variable */
+}
+
+.card-value {
+    font-family: 'Comfortaa', cursive;
+    font-size: 2em; /* Larger font for the value */
+    font-weight: 300; /* Lighter font weight for value */
+    margin-top: 0;
+    margin-bottom: 0;
+    color: var(--text-color); /* Use CSS variable, slightly dimmed by opacity below if needed or a new var */
+    opacity: 0.8; /* Slightly dim the value text from main text color */
+    text-align: right; /* Align value to the right */
+}
+
+/*
+   The .mdc-card styling from previous steps might conflict or be redundant.
+   For now, custom .card styling with CSS variables will take precedence.
+   If material-dynamic-colors.min.css provides its own variables for these
+   properties and they are desired, this section might need adjustment.
+   The current setup ensures our theme variables are applied.
+*/
+
+/* --- Responsiveness --- */
+
+/* Medium screens (e.g., tablets) - 2 cards per row */
+@media (min-width: 601px) and (max-width: 900px) {
+    .card {
+        width: calc(50% - 20px); /* Assumes card-section gap of 20px. (gap/2 for each card on one side) */
+                                  /* If card-section has padding, this might need adjustment or use box-sizing on card-section too. */
+                                  /* Let's adjust to calc(50% - 10px) as gap is distributed. */
+        width: calc(50% - 10px); /* Each card takes 50% minus half the gap */
+    }
+}
+
+/* Small screens (e.g., mobile phones) - cards stack vertically */
+@media (max-width: 600px) {
+    .card-section {
+        flex-direction: column; /* Stack cards vertically */
+        align-items: center; /* Center cards if they are not full width */
+        padding-left: 10px; /* Add some padding to the sides */
+        padding-right: 10px;
+    }
+    .card {
+        width: 90%; /* Cards take most of the width */
+        margin-bottom: 15px; /* Space between stacked cards */
+    }
+    .card:last-child {
+        margin-bottom: 0; /* No margin for the last card */
+    }
+}
+
+/* Very small screens - adjust font sizes and button padding */
+@media (max-width: 480px) {
+    .card-title {
+        font-size: 1.1em;
+    }
+    .card-value {
+        font-size: 1.8em;
+    }
+    #theme-toggle-button {
+        padding: 8px 12px;
+        font-size: 0.9em;
+    }
+    .dashboard-container { /* Reduce padding on very small screens */
+        padding: 0 10px 10px 10px;
+    }
+     header { /* Reduce padding on very small screens */
+        padding: 8px 10px;
+        margin-bottom: 10px;
+    }
+}
