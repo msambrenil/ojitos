@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Productos - Showroom Natura OjitOs</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">Toggle Theme</button>
+    </header>
+
+    <main class="products-container">
+        <h1>Gestión de Productos</h1>
+
+        <section class="filters-section">
+            <h2>Filtros</h2>
+            <div id="filter-controls">
+                <div class="form-field-group">
+                    <label for="filter-name">Filtrar por Nombre:</label>
+                    <input type="text" id="filter-name" name="filter_name" placeholder="Ej: Crema de manos">
+                </div>
+                <div class="form-field-group">
+                    <label for="filter-category">Filtrar por Categoría:</label>
+                    <input type="text" id="filter-category" name="filter_category" placeholder="Ej: Cuidados Diarios">
+                </div>
+                <div class="form-actions filter-actions">
+                    <button id="apply-filters-button" class="mdc-button">Aplicar Filtros</button>
+                    <button id="clear-filters-button" class="mdc-button">Limpiar Filtros</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="add-product-section">
+            <button id="add-new-product-button" class="mdc-button mdc-button--raised">
+                <span class="mdc-button__label">Añadir Nuevo Producto</span>
+            </button>
+        </section>
+
+        <section class="product-list-section">
+            <h2>Lista de Productos</h2>
+            <div id="product-table-placeholder">
+                <table id="product-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Imagen</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>P. Revista</th>
+                            <th>P. Showroom</th>
+                            <th>P. Feria</th>
+                            <th>Stock Actual</th>
+                            <th>Stock Crítico</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="product-table-body">
+                        <!-- Product rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="product-form-section" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span id="modal-close-button" class="close-modal-button">&times;</span>
+                <h3 id="modal-title">Añadir Producto</h3>
+                <form id="product-form" enctype="multipart/form-data">
+                    <input type="hidden" id="form-product-id" name="id">
+
+                    <div class="form-field-group">
+                        <label for="form-product-name">Nombre:</label>
+                        <input type="text" id="form-product-name" name="name" required>
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="form-product-description">Descripción:</label>
+                        <textarea id="form-product-description" name="description" rows="3"></textarea>
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="form-product-category">Categoría:</label>
+                        <input type="text" id="form-product-category" name="category">
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="form-product-tags">Tags (separados por coma):</label>
+                        <input type="text" id="form-product-tags" name="tags">
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="form-product-price-revista">Precio Revista:</label>
+                        <input type="number" id="form-product-price-revista" name="price_revista" required step="0.01" min="0">
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="form-product-stock-actual">Stock Actual:</label>
+                        <input type="number" id="form-product-stock-actual" name="stock_actual" required step="1" min="0">
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="form-product-stock-critico">Stock Crítico:</label>
+                        <input type="number" id="form-product-stock-critico" name="stock_critico" step="1" min="0">
+                    </div>
+
+                    <div class="form-field-group">
+                        <label for="form-product-image">Imagen:</label>
+                        <input type="file" id="form-product-image" name="image" accept="image/*">
+                    </div>
+                    <div id="current-image-preview" class="form-field-group">
+                        <!-- Image preview will be shown here by JS -->
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" id="save-product-button" class="mdc-button mdc-button--raised">Guardar</button>
+                        <button type="button" id="cancel-product-button" class="mdc-button">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.js"></script>
+    <script src="js/app.js" defer></script>
+    <script src="js/products.js" defer></script>
+</body>
+</html>
