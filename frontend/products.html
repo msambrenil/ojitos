@@ -14,8 +14,8 @@
             <a href="index.html" class="nav-link">Dashboard</a>
             <a href="products.html" class="nav-link">Gestión de Productos</a> <!-- Link to self for consistency -->
             <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
-            <!-- Auth-dependent links -->
             <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
             <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
             <span id="user-greeting" style="display:none; margin-left: auto; margin-right: 10px;"></span>
             <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
@@ -64,6 +64,7 @@
                             <th>P. Feria</th>
                             <th>Stock Actual</th>
                             <th>Stock Crítico</th>
+                            <th>Wishlist</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -134,7 +135,8 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.js"></script>
-    <script src="js/app.js" defer></script>
+    <script src="js/auth.js"></script> <!-- Ensure auth.js is loaded first for global functions -->
+    <script src="js/wishlist_buttons.js" defer></script>
     <script src="js/products.js" defer></script>
 </body>
 </html>

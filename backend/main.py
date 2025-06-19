@@ -3,14 +3,15 @@ import shutil
 import uuid
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, APIRouter
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, APIRouter, status # Added status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, OAuth2PasswordRequestFormStrict
 from datetime import datetime, timedelta, timezone
 from jose import jwt
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session, select
-from sqlalchemy import or_ # Added for search_term filter
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError # Added IntegrityError
 # typing.Optional is already imported at the top
 
 from passlib.context import CryptContext
@@ -73,6 +74,15 @@ from .database import (
     UserCreate,
     UserReadWithClientProfile, # Added
     ClientProfile,             # Added
+    Product,
+    ClientProfileCreate,       # Added for admin client profile creation
+    ClientProfileUpdate,       # Added for admin client profile update
+    MyProfileUpdate,           # Added for user's own profile update
+    Sale,                      # Added/Ensure present
+    SaleRead,                  # Added/Ensure present
+    WishlistItem,              # Added
+    WishlistItemCreate,        # Added
+    WishlistItemRead,          # Added
     Product,
     ProductCreate,
     ProductRead,
@@ -596,6 +606,102 @@ def delete_client_profile_only_admin(user_id: int, session: Session = Depends(ge
     return {"message": "ClientProfile deleted successfully. User account remains."}
 
 app.include_router(admin_clients_router)
+
+# --- "My Profile" Router (for logged-in users to manage their own ClientProfile) ---
+# This router is already defined and included below.
+
+# --- Wishlist Router ---
+wishlist_router = APIRouter(
+    prefix="/api/me/wishlist",
+    tags=["My Wishlist"],
+    dependencies=[Depends(get_current_active_user)]
+)
+
+@wishlist_router.post("/", response_model=WishlistItemRead, status_code=status.HTTP_201_CREATED)
+def add_item_to_wishlist(
+    item_in: WishlistItemCreate,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    product = session.get(Product, item_in.product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+    # Check if item already exists to prevent IntegrityError if possible,
+    # and to return existing item with 200 OK if that's desired behavior.
+    # However, the plan was to let DB constraint handle it and return 409.
+    # So, we directly attempt to create.
+
+    wishlist_item = WishlistItem(user_id=current_user.id, product_id=item_in.product_id)
+
+    try:
+        session.add(wishlist_item)
+        session.commit()
+        session.refresh(wishlist_item)
+        # Ensure product details are available for the response model
+        # Accessing wishlist_item.product should trigger lazy load or use already loaded data if eager loaded.
+        # For Pydantic serialization, this is usually handled if relationship is set up.
+        if wishlist_item.product:
+             pass # Ensures product data is loaded for WishlistItemRead serialization
+        return wishlist_item
+    except IntegrityError: # Handles unique constraint (user_id, product_id)
+        session.rollback()
+        # Fetch the existing item to return it, or just raise 409
+        existing_item = session.exec(
+            select(WishlistItem).where(WishlistItem.user_id == current_user.id, WishlistItem.product_id == item_in.product_id)
+        ).first()
+        if existing_item:
+            # If we want to return the existing item with a different status code (e.g. 200 OK or 303 See Other)
+            # we would need to handle the response differently.
+            # For a strict "create or fail if exists" API, 409 is appropriate.
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Item already in wishlist")
+        else:
+            # This case should be rare if IntegrityError was due to uq_user_product_wishlist
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not add item to wishlist after an unexpected conflict.")
+
+
+@wishlist_router.get("/", response_model=List[WishlistItemRead])
+def get_my_wishlist(
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    # SQLModel/Pydantic should handle serializing product details in WishlistItemRead
+    # based on the relationship if accessed.
+    wishlist_items = session.exec(
+        select(WishlistItem).where(WishlistItem.user_id == current_user.id)
+    ).all()
+    return wishlist_items
+
+@wishlist_router.delete("/{product_id}/", status_code=status.HTTP_204_NO_CONTENT)
+def remove_item_from_wishlist(
+    product_id: int,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    item_to_delete = session.exec(
+        select(WishlistItem).where(WishlistItem.user_id == current_user.id, WishlistItem.product_id == product_id)
+    ).first()
+
+    if not item_to_delete:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wishlist item not found")
+
+    session.delete(item_to_delete)
+    session.commit()
+    return # FastAPI returns 204 No Content automatically
+
+@wishlist_router.get("/check/{product_id}/", response_model=dict)
+def check_if_item_in_wishlist(
+    product_id: int,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    existing_item = session.exec(
+        select(WishlistItem).where(WishlistItem.user_id == current_user.id, WishlistItem.product_id == product_id)
+    ).first()
+    return {"in_wishlist": existing_item is not None}
+
+app.include_router(wishlist_router)
+
 
 # --- "My Profile" Router (for logged-in users to manage their own ClientProfile) ---
 my_profile_router = APIRouter(
