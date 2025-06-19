@@ -30,13 +30,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="remove-from-wishlist-button mdc-button--outlined" data-product-id="${product.id}">
                     <i class="fas fa-trash-alt"></i> Eliminar
                 </button>
-                <button class="add-to-cart-button-wishlist mdc-button--raised" data-product-id="${product.id}" disabled title="Funcionalidad no implementada">
+                <button class="add-to-cart-button-wishlist mdc-button--raised"
+                        data-product-id="${product.id}"
+                        data-product-name="${product.name || 'Producto'}"
+                        data-product-price="${product.price_revista || 0}"
+                        data-product-image-url="${product.image_url || ''}">
                     <i class="fas fa-shopping-cart"></i> Añadir al Carrito
                 </button>
             </div>
         `;
         return itemCard;
     }
+
+    async function handleWishlistAddToCartClick(event) { // Changed to be an event handler
+        const button = event.currentTarget;
+        const productId = parseInt(button.dataset.productId);
+        const productName = button.dataset.productName;
+        const productPrice = parseFloat(button.dataset.productPrice);
+        const productImageUrl = button.dataset.productImageUrl;
+        const itemCardElement = button.closest('.wishlist-item-card'); // For potential UI changes
+
+        const productDetails = {
+            id: productId,
+            name: productName,
+            price_revista: productPrice,
+            image_url: productImageUrl
+        };
+
+        if (!isLoggedIn()) {
+            if (typeof addGuestCartItem === 'function') {
+                addGuestCartItem(productDetails, 1);
+                alert(`"${productName}" añadido al carrito (invitado)!`);
+                if (typeof updateCartIndicator === 'function') updateCartIndicator();
+            } else {
+                alert("Error: Funcionalidad de carrito de invitado no disponible. Por favor, inicia sesión.");
+                window.location.href = 'login.html';
+            }
+            return;
+        }
+
+        // Logged-in user logic
+        const token = getToken();
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/me/cart/items/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ product_id: productId, quantity: 1 })
+            });
+
+            if (response.status === 401) { logout(); window.location.href = 'login.html'; return; }
+
+            const responseData = await response.json();
+            if (!response.ok) {
+                throw new Error(responseData.detail || 'Error al añadir el producto al carrito.');
+            }
+
+            alert(`"${productName}" añadido al carrito!`);
+            if (typeof updateCartIndicator === 'function') { updateCartIndicator(); }
+
+            if (confirm(`"${productName}" fue añadido al carrito. ¿Deseas eliminarlo de tu lista de deseos?`)) {
+                await handleRemoveFromWishlist(productId);
+            }
+        } catch (error) {
+            console.error('Error adding from wishlist to cart (logged in):', error);
+            alert(error.message);
+        }
+    }
+
 
     async function handleRemoveFromWishlist(productId) {
         if (!confirm('¿Estás seguro de que deseas eliminar este producto de tu lista de deseos?')) return;
@@ -141,15 +204,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (removeButton) {
                 const productId = removeButton.dataset.productId;
                 if (productId) {
-                    handleRemoveFromWishlist(productId);
+                    handleRemoveFromWishlist(productId); // Existing function
                 }
             }
 
             const addToCartButton = event.target.closest('.add-to-cart-button-wishlist');
             if (addToCartButton) {
-                const productId = addToCartButton.dataset.productId;
-                console.log(`Add to cart button clicked for product ID: ${productId} (functionality pending)`);
-                alert("Funcionalidad 'Añadir al Carrito' aún no implementada.");
+                // Directly pass the event to the handler, or extract details if handler isn't an event handler
+                handleWishlistAddToCartClick(event); // Pass event to extract details from button
             }
         });
     }

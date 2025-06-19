@@ -21,17 +21,44 @@ async function login(email, password) {
 
         const data = await response.json(); // Expects { access_token: "...", token_type: "bearer" }
         if (data.access_token) {
+            // Cart Merge Logic
+            if (typeof getGuestCart === 'function' && typeof clearGuestCart === 'function' && typeof mergeCarts === 'function') {
+                const guestCartItems = getGuestCart(); // From cart_guest.js
+                if (guestCartItems && guestCartItems.length > 0) {
+                    console.log("Guest cart found, attempting merge with backend...");
+                    const mergeSuccessful = await mergeCarts(guestCartItems, data.access_token); // mergeCarts is in auth.js
+                    if (mergeSuccessful) {
+                        console.log("Guest cart merged (or attempted) with backend cart.");
+                    } else {
+                        console.warn("Guest cart merge encountered issues or was aborted due to auth error. Some items might not have been merged.");
+                        // If merge failed due to auth, logout() would have been called in mergeCarts,
+                        // and this part of login() might not even be reached if redirection occurs.
+                        // If it returns false for other reasons, token is still set below.
+                    }
+                    // Clear local guest cart AFTER attempting merge, regardless of partial success,
+                    // to prevent re-merging or leaving items locally if user intended them to be merged.
+                    // If merge was aborted by logout in mergeCarts, this clear might not run if redirection happens first.
+                    clearGuestCart(); // From cart_guest.js
+                    console.log("Local guest cart cleared after merge attempt.");
+                } else {
+                    console.log("No guest cart items to merge.");
+                }
+            } else {
+                console.warn("Guest cart functions (getGuestCart, clearGuestCart) or mergeCarts not available. Skipping cart merge.");
+            }
+            // End of Cart Merge Logic
+
             localStorage.setItem('accessToken', data.access_token);
             console.log('Login successful, token stored.');
-            updateAuthUI(); // Update UI first
-            window.location.href = 'my_profile.html'; // Then redirect (or to dashboard: index.html)
+            updateAuthUI(); // Update UI (will also call updateCartIndicator which fetches the now merged cart)
+            window.location.href = 'my_profile.html'; // Redirect
             return true;
         } else {
             throw new Error('Token no recibido del servidor.');
         }
     } catch (error) {
         console.error('Error in login function:', error);
-        // alert(error.message); // Handled by login form typically
+        // alert(error.message); // Error is typically displayed by the calling form
         return false; // Indicate failure
     }
 }
@@ -53,18 +80,82 @@ function isLoggedIn() {
     return !!token;
 }
 
+async function mergeCarts(guestCartItems, token) {
+    if (!guestCartItems || guestCartItems.length === 0) {
+        console.log("No guest cart items to merge.");
+        return true; // Nothing to do, considered success for the merge operation
+    }
+
+    console.log("Starting cart merge process for items:", guestCartItems);
+    let allMergedSuccessfully = true;
+
+    for (const item of guestCartItems) {
+        if (item.productId === undefined || item.quantity === undefined) { // Check for undefined specifically
+            console.warn("Skipping invalid guest cart item (missing productId or quantity):", item);
+            continue;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/me/cart/items/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    product_id: item.productId, // Ensure this matches CartItemCreate schema
+                    quantity: item.quantity
+                })
+            });
+
+            if (response.status === 401) {
+                console.error("Authentication error during cart merge. This should not happen if token was just obtained. Logging out.");
+                logout(); // This will also update UI and redirect
+                allMergedSuccessfully = false;
+                return false; // Stop merge process immediately
+            }
+
+            if (!response.ok) {
+                // Try to get error detail, but don't let it crash if parsing fails
+                let errorDetail = `HTTP status ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorDetail = errorData.detail || errorDetail;
+                } catch (e) { /* ignore parsing error, use status text */ }
+
+                console.error(`Failed to merge item (ID: ${item.productId}): ${errorDetail}`);
+                allMergedSuccessfully = false; // Mark as not entirely successful but continue with other items
+            } else {
+                console.log(`Successfully merged item (ID: ${item.productId}), quantity: ${item.quantity}`);
+            }
+        } catch (error) {
+            console.error(`Network or other error merging item (ID: ${item.productId}):`, error);
+            allMergedSuccessfully = false;
+        }
+    }
+
+    if (allMergedSuccessfully) {
+        console.log("Cart merge completed successfully.");
+    } else {
+        console.warn("Cart merge completed with some errors. Check console for details.");
+    }
+    return allMergedSuccessfully;
+}
+
 function updateAuthUI() {
     const loginLink = document.getElementById('nav-login-link');
     const profileLink = document.getElementById('nav-profile-link');
     const logoutButton = document.getElementById('nav-logout-button');
     const userGreeting = document.getElementById('user-greeting');
     const adminClientsLink = document.getElementById('nav-admin-clients-link');
-    const wishlistLink = document.getElementById('nav-wishlist-link'); // Added wishlist link
+    const wishlistLink = document.getElementById('nav-wishlist-link');
+    const navCartLink = document.getElementById('nav-cart-link'); // Added cart link ref
 
     if (isLoggedIn()) {
         if (loginLink) loginLink.style.display = 'none';
         if (profileLink) profileLink.style.display = 'inline';
-        if (wishlistLink) wishlistLink.style.display = 'inline'; // Show wishlist link
+        if (wishlistLink) wishlistLink.style.display = 'inline';
+        if (navCartLink) navCartLink.style.display = 'inline'; // Show cart link
         if (logoutButton) logoutButton.style.display = 'inline-block';
         if (userGreeting) {
             userGreeting.style.display = 'inline';
@@ -83,27 +174,91 @@ function updateAuthUI() {
     } else {
         if (loginLink) loginLink.style.display = 'inline';
         if (profileLink) profileLink.style.display = 'none';
-        if (wishlistLink) wishlistLink.style.display = 'none'; // Hide wishlist link
+        if (wishlistLink) wishlistLink.style.display = 'none';
+        if (navCartLink) navCartLink.style.display = 'none'; // Hide cart link
         if (logoutButton) logoutButton.style.display = 'none';
         if (userGreeting) {
             userGreeting.style.display = 'none';
-            userGreeting.textContent = ''; // Clear greeting
+            userGreeting.textContent = '';
         }
-        // Future: Hide adminClientsLink if not logged in
-        // if (adminClientsLink) adminClientsLink.style.display = 'none';
-        // (Note: adminClientsLink visibility is not managed by login state here, but by role later)
+    }
+    // This call will now also update the cart indicator based on login state
+    updateCartIndicator();
+}
+
+async function updateCartIndicator() {
+    const navCartLink = document.getElementById('nav-cart-link');
+    const cartItemCountSpan = document.getElementById('cart-item-count');
+
+    if (!navCartLink || !cartItemCountSpan) {
+        return; // Elements not present on this page (e.g. if some pages have different headers)
+    }
+
+    if (isLoggedIn()) {
+        const token = getToken();
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/me/cart/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const cart = await response.json(); // CartRead
+                let totalQuantity = 0;
+                if (cart && cart.items) {
+                    cart.items.forEach(item => {
+                        totalQuantity += item.quantity;
+                    });
+                }
+                cartItemCountSpan.textContent = totalQuantity;
+                navCartLink.style.display = 'inline'; // Ensure link is visible
+            } else if (response.status === 401) {
+                logout(); // This will call updateAuthUI which calls updateCartIndicator again
+                          // The second call will hit the 'else' block below.
+            } else {
+                console.warn('Could not fetch cart for indicator:', response.status);
+                navCartLink.style.display = 'inline'; // Still show link
+                cartItemCountSpan.textContent = '0'; // Or '!' for error
+            }
+        } catch (error) {
+            console.error('Error updating cart indicator:', error);
+            navCartLink.style.display = 'inline'; // Still show link
+            cartItemCountSpan.textContent = '0'; // Or '!' for error
+        }
+    } else { // Not logged in - GUEST CART LOGIC
+        if (typeof getGuestCart === 'function') { // from cart_guest.js
+            const guestCartItems = getGuestCart();
+            let totalQuantity = 0;
+            if (guestCartItems && guestCartItems.length > 0) {
+                guestCartItems.forEach(item => {
+                    totalQuantity += item.quantity;
+                });
+            }
+
+            if (cartItemCountSpan) cartItemCountSpan.textContent = totalQuantity;
+
+            // Show cart link for guests only if cart is not empty.
+            if (navCartLink) {
+                navCartLink.style.display = totalQuantity > 0 ? 'inline' : 'none';
+            }
+        } else {
+            // Fallback if cart_guest.js or getGuestCart isn't loaded/available
+            if (cartItemCountSpan) cartItemCountSpan.textContent = '0';
+            if (navCartLink) navCartLink.style.display = 'none';
+            // console.warn("getGuestCart function not found for guest cart indicator. Ensure cart_guest.js is loaded before auth.js.");
+            // Warning removed as per plan to adjust script order in HTML next.
+        }
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    updateAuthUI(); // Call on every page load to set initial UI state
 
-    const logoutButton = document.getElementById('nav-logout-button');
-    if (logoutButton) {
-        logoutButton.addEventListener('click', () => {
-            logout(); // Call the logout function from auth.js
-            // updateAuthUI(); // Called inside logout() already
-            window.location.href = 'login.html'; // Redirect after logout
+document.addEventListener('DOMContentLoaded', () => {
+    updateAuthUI(); // This will now also trigger updateCartIndicator
+
+    const logoutButtonElement = document.getElementById('nav-logout-button'); // Renamed to avoid conflict
+    if (logoutButtonElement) {
+        logoutButtonElement.addEventListener('click', () => {
+            logout();
+            // updateAuthUI(); // Called by logout()
+            window.location.href = 'login.html';
         });
     }
 });

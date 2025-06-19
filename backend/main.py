@@ -72,22 +72,25 @@ from .database import (
     engine,
     User,
     UserCreate,
-    UserReadWithClientProfile, # Added
-    ClientProfile,             # Added
-    Product,
-    ClientProfileCreate,       # Added for admin client profile creation
-    ClientProfileUpdate,       # Added for admin client profile update
-    MyProfileUpdate,           # Added for user's own profile update
-    Sale,                      # Added/Ensure present
-    SaleRead,                  # Added/Ensure present
-    WishlistItem,              # Added
-    WishlistItemCreate,        # Added
-    WishlistItemRead,          # Added
+    UserReadWithClientProfile,
+    ClientProfile,
+    ClientProfileCreate,
+    ClientProfileUpdate,
+    MyProfileUpdate,
+    Sale,
+    SaleRead,
+    WishlistItem,
+    WishlistItemCreate,
+    WishlistItemRead,
+    Cart,                      # Added
+    CartItem,                  # Added
+    CartRead,                  # Added
+    CartItemCreate,            # Added
+    CartItemUpdate,            # Added
     Product,
     ProductCreate,
     ProductRead,
     ProductUpdate
-    # get_session is defined below, Session and select are imported from sqlmodel directly
 )
 
 
@@ -908,3 +911,159 @@ async def get_user_sales_history(
     return sales_history
 
 app.include_router(user_data_router)
+
+
+# --- Shopping Cart Router ---
+cart_router = APIRouter(
+    prefix="/api/me/cart",
+    tags=["My Cart"],
+    dependencies=[Depends(get_current_active_user)]
+)
+
+def get_or_create_cart(user_id: int, session: Session) -> Cart:
+    cart = session.exec(select(Cart).where(Cart.user_id == user_id)).first()
+    if not cart:
+        cart = Cart(user_id=user_id, created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
+        session.add(cart)
+        session.commit()
+        session.refresh(cart)
+    return cart
+
+@cart_router.get("/", response_model=CartRead)
+def get_my_cart(
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    cart = get_or_create_cart(user_id=current_user.id, session=session)
+    # Access items to ensure they are loaded for CartRead, especially for the computed field.
+    # SQLModel's behavior with Pydantic serialization might handle this, but explicit access is safer.
+    if cart.items: # This access helps in populating items for the response model
+        pass
+    return cart
+
+@cart_router.post("/items/", response_model=CartRead)
+def add_item_to_cart(
+    item_in: CartItemCreate,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    cart = get_or_create_cart(user_id=current_user.id, session=session)
+
+    product = session.get(Product, item_in.product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+    # TODO: Check product stock if stock_actual is relevant for cart addition
+    # if product.stock_actual < item_in.quantity:
+    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not enough stock")
+
+    existing_cart_item = session.exec(
+        select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == item_in.product_id)
+    ).first()
+
+    if existing_cart_item:
+        existing_cart_item.quantity += item_in.quantity # Add to existing quantity
+        # price_at_addition remains from the first time it was added.
+    else:
+        existing_cart_item = CartItem(
+            cart_id=cart.id,
+            product_id=item_in.product_id,
+            quantity=item_in.quantity,
+            price_at_addition=product.price_revista, # Store current price_revista
+            added_at=datetime.now(timezone.utc)
+        )
+
+    # Ensure quantity is positive (gt=0 is on Pydantic model, but defensive check after +=)
+    if existing_cart_item.quantity <= 0:
+        # This case should not be reached if CartItemCreate.quantity is always > 0
+        # and we are only adding. If item_in.quantity could be negative, then this makes sense.
+        # For current design, item_in.quantity is positive.
+        session.delete(existing_cart_item)
+    else:
+        session.add(existing_cart_item)
+
+    cart.updated_at = datetime.now(timezone.utc)
+    session.add(cart)
+
+    try:
+        session.commit()
+        session.refresh(cart)
+        # Refresh items and their products for the response
+        for item_in_cart in cart.items:
+            session.refresh(item_in_cart)
+            if item_in_cart.product: # Ensure product is loaded for CartItemRead
+                pass
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred: {str(e)}")
+
+    return cart
+
+@cart_router.put("/items/{product_id}/", response_model=CartRead)
+def update_cart_item_quantity(
+    product_id: int,
+    item_update: CartItemUpdate, # Contains new quantity (validated > 0 by Pydantic)
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    cart = get_or_create_cart(user_id=current_user.id, session=session)
+
+    cart_item = session.exec(
+        select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == product_id)
+    ).first()
+
+    if not cart_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cart item not found")
+
+    cart_item.quantity = item_update.quantity # quantity is > 0 due to CartItemUpdate model
+
+    cart.updated_at = datetime.now(timezone.utc)
+    session.add(cart_item)
+    session.add(cart)
+    session.commit()
+    session.refresh(cart)
+    for item_in_cart in cart.items: session.refresh(item_in_cart) # Ensure items are refreshed
+    return cart
+
+@cart_router.delete("/items/{product_id}/", response_model=CartRead)
+def remove_cart_item(
+    product_id: int,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    cart = get_or_create_cart(user_id=current_user.id, session=session)
+
+    cart_item = session.exec(
+        select(CartItem).where(CartItem.cart_id == cart.id, CartItem.product_id == product_id)
+    ).first()
+
+    if not cart_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cart item not found")
+
+    session.delete(cart_item)
+    cart.updated_at = datetime.now(timezone.utc)
+    session.add(cart)
+    session.commit()
+    session.refresh(cart)
+    return cart
+
+@cart_router.delete("/", response_model=CartRead)
+def clear_my_cart(
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session)
+):
+    cart = get_or_create_cart(user_id=current_user.id, session=session)
+
+    # Cascade delete for items is set on Cart.items relationship.
+    # Deleting items individually and then committing is safer/more explicit for some ORMs or DBs.
+    for item in list(cart.items): # Iterate over a copy
+        session.delete(item)
+
+    cart.updated_at = datetime.now(timezone.utc)
+    # cart.items should be empty now for the response model after refresh
+    session.add(cart)
+    session.commit()
+    session.refresh(cart)
+    return cart
+
+app.include_router(cart_router)
