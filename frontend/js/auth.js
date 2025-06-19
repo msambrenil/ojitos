@@ -58,11 +58,13 @@ function updateAuthUI() {
     const profileLink = document.getElementById('nav-profile-link');
     const logoutButton = document.getElementById('nav-logout-button');
     const userGreeting = document.getElementById('user-greeting');
-    const adminClientsLink = document.getElementById('nav-admin-clients-link'); // For admin role later
+    const adminClientsLink = document.getElementById('nav-admin-clients-link');
+    const wishlistLink = document.getElementById('nav-wishlist-link'); // Added wishlist link
 
     if (isLoggedIn()) {
         if (loginLink) loginLink.style.display = 'none';
         if (profileLink) profileLink.style.display = 'inline';
+        if (wishlistLink) wishlistLink.style.display = 'inline'; // Show wishlist link
         if (logoutButton) logoutButton.style.display = 'inline-block';
         if (userGreeting) {
             userGreeting.style.display = 'inline';
@@ -81,6 +83,7 @@ function updateAuthUI() {
     } else {
         if (loginLink) loginLink.style.display = 'inline';
         if (profileLink) profileLink.style.display = 'none';
+        if (wishlistLink) wishlistLink.style.display = 'none'; // Hide wishlist link
         if (logoutButton) logoutButton.style.display = 'none';
         if (userGreeting) {
             userGreeting.style.display = 'none';
@@ -88,6 +91,7 @@ function updateAuthUI() {
         }
         // Future: Hide adminClientsLink if not logged in
         // if (adminClientsLink) adminClientsLink.style.display = 'none';
+        // (Note: adminClientsLink visibility is not managed by login state here, but by role later)
     }
 }
 

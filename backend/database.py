@@ -1,8 +1,8 @@
 from datetime import datetime
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List # Ensure List is explicitly imported
 
-from sqlalchemy import create_engine
-from sqlmodel import Field, Session, SQLModel, Relationship # Added Relationship
+from sqlalchemy import create_engine, UniqueConstraint # Added UniqueConstraint
+from sqlmodel import Field, Session, SQLModel, Relationship
 from pydantic import model_validator
 
 
@@ -28,7 +28,8 @@ class User(UserBase, table=True):
     hashed_password: str
 
     client_profile: Optional["ClientProfile"] = Relationship(back_populates="user")
-    sales: List["Sale"] = Relationship(back_populates="user_as_client") # Changed from "user" to avoid conflict if Sale.user is also a field
+    sales: List["Sale"] = Relationship(back_populates="user_as_client")
+    wishlist_items: List["WishlistItem"] = Relationship(back_populates="user") # Added wishlist_items
 
 class UserCreate(UserBase): # For user creation, password is required
     password: str
@@ -100,6 +101,7 @@ class ProductBase(SQLModel):
 
 class Product(ProductBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    wished_by_users: List["WishlistItem"] = Relationship(back_populates="product") # Added wished_by_users
     # Inherits all fields from ProductBase
     # price_showroom and price_feria will store the calculated values if provided,
     # or the result of calculations if not. They remain Optional in the DB.
@@ -190,3 +192,29 @@ class MyProfileUpdate(SQLModel):
     whatsapp_number: Optional[str] = Field(default=None) # Consider adding validation for phone numbers later
     gender: Optional[str] = Field(default=None)
     # Excludes client_level (managed by admin) and profile_image_url (managed by separate endpoint)
+
+
+# --- Wishlist Models ---
+class WishlistItemBase(SQLModel):
+    product_id: int = Field(foreign_key="product.id", index=True) # product_id is essential
+
+class WishlistItem(WishlistItemBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    added_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user: User = Relationship(back_populates="wishlist_items")
+    product: Product = Relationship(back_populates="wished_by_users")
+
+    # Unique constraint for user_id and product_id
+    __table_args__ = (UniqueConstraint("user_id", "product_id", name="uq_user_product_wishlist"),)
+
+class WishlistItemCreate(WishlistItemBase):
+    pass # product_id is inherited, user_id will be from context
+
+class WishlistItemRead(WishlistItemBase):
+    id: int
+    user_id: int
+    added_at: datetime
+    product: ProductRead # Embed Product details

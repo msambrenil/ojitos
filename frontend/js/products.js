@@ -200,6 +200,14 @@ async function fetchAndDisplayProducts(filters = {}) {
             row.insertCell().textContent = product.stock_actual;
             row.insertCell().textContent = product.stock_critico || '-';
 
+            // Wishlist cell - New
+            const wishlistCell = row.insertCell();
+            if (typeof renderWishlistButton === 'function') {
+                renderWishlistButton(product.id, wishlistCell);
+            } else {
+                wishlistCell.textContent = 'N/A'; // Fallback if function not loaded
+            }
+
             const actionsCell = row.insertCell();
             const editButton = document.createElement('button');
             editButton.classList.add('edit-product-button');
