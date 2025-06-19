@@ -222,15 +222,87 @@ async function fetchAndDisplayProducts(filters = {}) {
             deleteButton.dataset.id = product.id;
             deleteButton.addEventListener('click', () => handleDeleteProduct(product.id, product.name));
             actionsCell.appendChild(deleteButton);
+
+            // Add to Cart button for admin product table
+            const addToCartBtnAdmin = document.createElement('button');
+            addToCartBtnAdmin.classList.add('admin-add-to-cart-button', 'mdc-button', 'mdc-button--outlined');
+            addToCartBtnAdmin.textContent = 'Al Carrito';
+            addToCartBtnAdmin.dataset.productId = product.id;
+            addToCartBtnAdmin.dataset.productName = product.name;
+            addToCartBtnAdmin.dataset.productPrice = product.price_revista;
+            addToCartBtnAdmin.dataset.productImageUrl = product.image_url || '';
+            addToCartBtnAdmin.addEventListener('click', handleAddToCartClick);
+            actionsCell.appendChild(addToCartBtnAdmin);
         });
 
     } catch (error) {
         console.error("Error fetching products:", error);
         if (productTableBody) {
-            productTableBody.innerHTML = '<tr><td colspan="9">Error al cargar productos. Ver consola para más detalles.</td></tr>';
+            // Adjusted colspan to 10 due to new Wishlist column
+            productTableBody.innerHTML = '<tr><td colspan="10">Error al cargar productos. Ver consola para más detalles.</td></tr>';
         }
     }
 }
+
+// Add this function in products.js
+async function handleAddToCartClick(event) {
+    const button = event.currentTarget;
+    const productId = parseInt(button.dataset.productId);
+    const productName = button.dataset.productName || "Producto";
+    const productPrice = parseFloat(button.dataset.productPrice);
+    const productImageUrl = button.dataset.productImageUrl;
+
+    if (typeof isLoggedIn !== 'function' || !isLoggedIn()) {
+        if (typeof addGuestCartItem === 'function') {
+            const productDetails = {
+                id: productId,
+                name: productName,
+                price_revista: productPrice,
+                image_url: productImageUrl
+            };
+            addGuestCartItem(productDetails, 1);
+            alert(`"${productName}" añadido al carrito (invitado)!`);
+            if (typeof updateCartIndicator === 'function') updateCartIndicator();
+        } else {
+            alert("Error: Funcionalidad de carrito de invitado no disponible. Por favor, inicia sesión.");
+            window.location.href = 'login.html';
+        }
+        return;
+    }
+
+    // Logged-in user logic
+    const token = getToken();
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/me/cart/items/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ product_id: productId, quantity: 1 })
+        });
+
+        if (response.status === 401) {
+            logout();
+            window.location.href = 'login.html';
+            return;
+        }
+
+        const responseData = await response.json();
+        if (!response.ok) {
+            throw new Error(responseData.detail || 'Error al añadir el producto al carrito.');
+        }
+
+        alert(`"${productName}" añadido al carrito!`);
+        if (typeof updateCartIndicator === 'function') {
+            updateCartIndicator();
+        }
+    } catch (error) {
+        console.error('Error adding to cart (logged in):', error);
+        alert(error.message);
+    }
+}
+
 
 // Event Listeners for Filters
 if (applyFiltersButton) {

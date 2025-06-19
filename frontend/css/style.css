@@ -863,6 +863,172 @@ body.dark-mode .profile-section {
     /* font-style: normal; /* This might be too broad, handle in JS if needed */
 }
 
+/* --- My Cart Page Styles --- */
+.cart-container {
+    /* Uses .page-container styles, specific overrides if needed */
+}
+
+#cart-items-section {
+    /* Container for the list of items, if specific styling needed beyond direct children */
+    background-color: var(--card-background-color); /* Give it a card base */
+    padding: 1px 20px 20px 20px; /* Padding around items list, 1px to contain margins */
+    border-radius: 8px;
+    box-shadow: var(--card-shadow-color);
+}
+body.dark-mode #cart-items-section {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+
+.cart-item-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px; /* Increased gap */
+    padding: 20px 0; /* Padding top/bottom for each item, 0 left/right as section has padding */
+    border-bottom: 1px solid var(--card-border-color);
+}
+#cart-items-container > .cart-item-card:last-child { /* Remove border from last item */
+    border-bottom: none;
+    padding-bottom: 10px; /* Reduce padding if it's the last item */
+}
+#cart-items-container > .cart-item-card:first-child {
+    padding-top: 10px; /* Reduce padding if it's the first item */
+}
+
+
+.cart-item-image {
+    width: 90px; /* Slightly larger image */
+    height: 90px;
+    object-fit: cover;
+    border-radius: 6px; /* Softer radius */
+    border: 1px solid var(--card-border-color);
+}
+
+.cart-item-details {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column; /* Stack details vertically */
+    gap: 5px; /* Space between detail elements */
+}
+
+.cart-item-name {
+    font-size: 1.15em; /* Slightly larger */
+    font-weight: bold;
+    margin: 0; /* Reset margin */
+    color: var(--text-color);
+}
+
+.cart-item-price, .cart-item-subtotal {
+    font-size: 0.95em; /* Slightly larger */
+    color: var(--text-color-secondary);
+    margin: 0; /* Reset margin */
+}
+
+.cart-item-subtotal {
+    font-weight: bold;
+    color: var(--text-color); /* Subtotal can be more prominent */
+    margin-top: 5px;
+}
+
+.cart-item-quantity {
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px; /* More space around quantity input */
+}
+
+.cart-item-quantity label {
+    font-size: 0.9em;
+    color: var(--text-color-secondary);
+}
+
+input.quantity-input { /* Also used in other forms, ensure specificity if needed */
+    width: 70px; /* Wider input */
+    padding: 8px 10px; /* Better padding */
+    text-align: center;
+    border: 1px solid var(--card-border-color);
+    border-radius: 4px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+input.quantity-input:focus {
+    border-color: var(--link-color);
+    box-shadow: 0 0 0 2px rgba(var(--link-color-rgb, 0,123,255), 0.25);
+}
+
+
+.cart-item-actions {
+    margin-left: auto;
+    padding-top: 0; /* Align with top of details if image is taller */
+}
+
+.remove-from-cart-button.mdc-button--icon {
+    min-width: auto;
+    padding: 10px; /* Make clickable area larger */
+    color: var(--danger-color, #D32F2F);
+    background-color: transparent;
+    border: none; /* Remove border if it's just an icon button */
+}
+.remove-from-cart-button.mdc-button--icon .fas {
+    font-size: 1.3em;
+}
+.remove-from-cart-button.mdc-button--icon:hover {
+    background-color: rgba(var(--danger-rgb, 211, 47, 47), 0.1); /* Subtle hover for icon button */
+}
+
+
+/* Cart Summary Styling */
+.cart-summary { /* .card-like is applied in HTML */
+    padding: 25px; /* More padding */
+    margin-top: 30px;
+}
+
+.cart-summary h2 {
+    margin-top: 0;
+    margin-bottom: 20px; /* More space below heading */
+    border-bottom: 1px solid var(--card-border-color);
+    padding-bottom: 15px; /* More space for border */
+    color: var(--text-color);
+}
+
+#cart-summary-details p {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1.1em; /* Make summary text slightly larger */
+    margin: 12px 0; /* More vertical spacing */
+}
+
+#cart-summary-details strong {
+    font-weight: 600; /* Bolder labels */
+    color: var(--text-color);
+}
+
+#cart-total-price {
+    font-weight: bold;
+    font-size: 1.3em; /* More prominent total */
+    color: var(--primary-color, #007bff);
+}
+
+.cart-main-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 30px; /* More space above main action buttons */
+    gap: 15px; /* Space between buttons if they wrap */
+}
+.cart-main-actions button {
+    flex-grow: 1; /* Allow buttons to grow */
+    padding: 12px 15px; /* Larger buttons */
+}
+@media(min-width: 600px) {
+    .cart-main-actions button {
+        flex-grow: 0; /* Don't grow on larger screens if space-between is enough */
+    }
+}
+
+/* Ensure .empty-list-message styles are appropriate (defined in wishlist CSS) */
+/* It's already styled from wishlist, ensure it looks good here too. */
+
 /* --- Admin Client Sales History Page Styles --- */
 #client-info-header {
     /* .card-like class is already applied in HTML, providing base style */

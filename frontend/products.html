@@ -16,6 +16,7 @@
             <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
             <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
             <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
+            <a href="my_cart.html" class="nav-link" id="nav-cart-link" style="display:none;"><i class="fas fa-shopping-cart"></i> Carrito (<span id="cart-item-count">0</span>)</a>
             <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
             <span id="user-greeting" style="display:none; margin-left: auto; margin-right: 10px;"></span>
             <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
@@ -135,7 +136,8 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.js"></script>
-    <script src="js/auth.js"></script> <!-- Ensure auth.js is loaded first for global functions -->
+    <script src="js/cart_guest.js" defer></script>
+    <script src="js/auth.js" defer></script>
     <script src="js/wishlist_buttons.js" defer></script>
     <script src="js/products.js" defer></script>
 </body>

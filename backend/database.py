@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Optional, Any, Dict, List # Ensure List is explicitly imported
+from typing import Optional, Any, Dict, List
 
-from sqlalchemy import create_engine, UniqueConstraint # Added UniqueConstraint
+from sqlalchemy import create_engine, UniqueConstraint
 from sqlmodel import Field, Session, SQLModel, Relationship
-from pydantic import model_validator
+from pydantic import model_validator, computed_field # Added computed_field
 
 
 DATABASE_URL = "sqlite:///./showroom_natura.db"
@@ -29,7 +29,8 @@ class User(UserBase, table=True):
 
     client_profile: Optional["ClientProfile"] = Relationship(back_populates="user")
     sales: List["Sale"] = Relationship(back_populates="user_as_client")
-    wishlist_items: List["WishlistItem"] = Relationship(back_populates="user") # Added wishlist_items
+    wishlist_items: List["WishlistItem"] = Relationship(back_populates="user")
+    cart: Optional["Cart"] = Relationship(back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}) # Added cart relationship
 
 class UserCreate(UserBase): # For user creation, password is required
     password: str
@@ -218,3 +219,71 @@ class WishlistItemRead(WishlistItemBase):
     user_id: int
     added_at: datetime
     product: ProductRead # Embed Product details
+
+
+# --- Cart Models ---
+class Cart(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True) # One cart per user
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
+
+    # Relationships
+    items: List["CartItem"] = Relationship(back_populates="cart", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    user: "User" = Relationship(back_populates="cart")
+
+
+class CartItemBase(SQLModel):
+    product_id: int = Field(gt=0) # Ensure product_id is positive
+    quantity: int = Field(default=1, gt=0)
+
+
+class CartItemCreate(CartItemBase):
+    pass # Inherits fields from CartItemBase
+
+
+class CartItemUpdate(SQLModel):
+    quantity: int = Field(gt=0) # Quantity must be positive
+
+
+class CartItem(SQLModel, table=True): # Define table model after base and create/update schemas
+    id: Optional[int] = Field(default=None, primary_key=True)
+    cart_id: int = Field(foreign_key="cart.id", index=True)
+    product_id: int = Field(foreign_key="product.id", index=True)
+    quantity: int = Field(default=1, gt=0)
+    added_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    price_at_addition: Optional[float] = Field(default=None) # Price when product was added
+
+    # Relationships
+    cart: "Cart" = Relationship(back_populates="items")
+    product: "Product" = Relationship() # Uni-directional for now
+
+    # Unique constraint for cart_id and product_id
+    __table_args__ = (UniqueConstraint("cart_id", "product_id", name="uq_cart_product"),)
+
+
+class CartItemRead(CartItemBase): # For API responses
+    id: int
+    # product_id and quantity inherited from CartItemBase
+    price_at_addition: Optional[float] = None
+    added_at: datetime # Added from CartItem model
+    product: "ProductRead"
+
+
+class CartRead(SQLModel): # For API response for the whole cart
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    items: List[CartItemRead] = []
+
+    @computed_field
+    @property
+    def total_cart_price(self) -> float:
+        total = 0.0
+        for item in self.items:
+            # Ensure product and its price_revista are available
+            # price_revista is not optional on ProductBase, so it should exist.
+            if item.product and isinstance(item.product.price_revista, (int, float)):
+                total += item.quantity * item.product.price_revista
+        return round(total, 2)
