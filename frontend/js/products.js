@@ -146,12 +146,14 @@ if (productForm) {
 }
 
 
-const filterNameInput = document.getElementById('filter-name');
-const filterCategoryInput = document.getElementById('filter-category');
-const applyFiltersButton = document.getElementById('apply-filters-button');
-const clearFiltersButton = document.getElementById('clear-filters-button');
+// References to new filter elements
+const productSearchInput = document.getElementById('product-search');
+const productCategoryFilterInput = document.getElementById('product-category-filter');
+const productLowStockFilterCheckbox = document.getElementById('product-low-stock-filter');
+const applyProductFiltersButton = document.getElementById('apply-product-filters-button'); // Will be used later
+const clearProductFiltersButton = document.getElementById('clear-product-filters-button'); // Will be used later
 
-// Fetch and Display Products (Modified to add Edit button listener and filters)
+// Fetch and Display Products (Modified for new filters and auth)
 async function fetchAndDisplayProducts(filters = {}) {
     if (!productTableBody) {
         console.error("Product table body not found!");
@@ -159,24 +161,50 @@ async function fetchAndDisplayProducts(filters = {}) {
     }
 
     const params = new URLSearchParams();
-    if (filters.name) params.append('name', filters.name); // Backend needs to support 'name'
+    if (filters.searchTerm) params.append('search_term', filters.searchTerm);
     if (filters.category) params.append('category', filters.category);
-    // params.append('skip', '0'); // Reset pagination on filter, or manage it more complexly
-    // params.append('limit', '100'); // Or your default limit
-    // For now, backend default pagination (if any) will apply or it returns all.
-    // The existing backend GET /api/products/ has skip/limit but not name filter yet.
+    if (filters.lowStock) params.append('low_stock', 'true'); // Send 'true' as a string
+
+    params.append('skip', '0');
+    params.append('limit', '100');
 
     const queryString = params.toString();
-    const apiUrl = `/api/products/${queryString ? '?' + queryString : ''}`;
+    // API_BASE_URL should be defined globally (e.g. in auth.js)
+    const apiUrl = `${API_BASE_URL}/api/products/${queryString ? '?' + queryString : ''}`;
+    const token = getToken(); // Assuming getToken() is available from auth.js
+
+    if (!token) {
+        console.warn("No token found. User might not be logged in. Attempting to redirect to login.");
+        if (typeof logout === 'function') logout();
+        else window.location.href = 'login.html'; // Fallback if logout function not available
+        return;
+    }
 
     try {
-        const response = await fetch(apiUrl);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const products = await response.json();
+        const response = await fetch(apiUrl, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
 
+        if (response.status === 401 || response.status === 403) {
+            console.error("Authorization error fetching products. Logging out.");
+            if (typeof logout === 'function') logout();
+            else window.location.href = 'login.html';
+            return;
+        }
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: `HTTP error! status: ${response.status}` }));
+            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+        }
+
+        const products = await response.json();
         productTableBody.innerHTML = '';
+
+        if (products.length === 0) {
+            productTableBody.innerHTML = '<tr><td colspan="10">No se encontraron productos con los filtros aplicados.</td></tr>';
+            return;
+        }
 
         products.forEach(product => {
             const row = productTableBody.insertRow();
@@ -187,7 +215,8 @@ async function fetchAndDisplayProducts(filters = {}) {
 
             const imageCell = row.insertCell();
             const img = document.createElement('img');
-            img.src = product.image_url ? product.image_url : 'https://via.placeholder.com/60x60.png?text=No+Image';
+            // Prepend API_BASE_URL if image_url is a relative path from backend root
+            img.src = product.image_url ? (product.image_url.startsWith('http') ? product.image_url : `${API_BASE_URL}${product.image_url}`) : 'https://via.placeholder.com/60x60.png?text=No+Image';
             img.alt = product.name;
             img.classList.add('product-image-thumbnail');
             imageCell.appendChild(img);
@@ -200,33 +229,31 @@ async function fetchAndDisplayProducts(filters = {}) {
             row.insertCell().textContent = product.stock_actual;
             row.insertCell().textContent = product.stock_critico || '-';
 
-            // Wishlist cell - New
             const wishlistCell = row.insertCell();
             if (typeof renderWishlistButton === 'function') {
                 renderWishlistButton(product.id, wishlistCell);
             } else {
-                wishlistCell.textContent = 'N/A'; // Fallback if function not loaded
+                wishlistCell.textContent = 'N/A';
             }
 
             const actionsCell = row.insertCell();
             const editButton = document.createElement('button');
-            editButton.classList.add('edit-product-button');
-            editButton.textContent = 'Editar';
+            editButton.classList.add('edit-product-button', 'mdc-button', 'mdc-button--outlined', 'mdc-button--dense');
+            editButton.innerHTML = '<span class="mdc-button__ripple"></span><span class="mdc-button__label">Editar</span>';
             editButton.dataset.id = product.id;
             editButton.addEventListener('click', () => openModalForEdit(product.id));
             actionsCell.appendChild(editButton);
 
             const deleteButton = document.createElement('button');
-            deleteButton.classList.add('delete-product-button');
-            deleteButton.textContent = 'Eliminar';
+            deleteButton.classList.add('delete-product-button', 'mdc-button', 'mdc-button--outlined', 'mdc-button--dense', 'mdc-button--danger');
+            deleteButton.innerHTML = '<span class="mdc-button__ripple"></span><span class="mdc-button__label">Eliminar</span>';
             deleteButton.dataset.id = product.id;
             deleteButton.addEventListener('click', () => handleDeleteProduct(product.id, product.name));
             actionsCell.appendChild(deleteButton);
 
-            // Add to Cart button for admin product table
             const addToCartBtnAdmin = document.createElement('button');
-            addToCartBtnAdmin.classList.add('admin-add-to-cart-button', 'mdc-button', 'mdc-button--outlined');
-            addToCartBtnAdmin.textContent = 'Al Carrito';
+            addToCartBtnAdmin.classList.add('admin-add-to-cart-button', 'mdc-button', 'mdc-button--raised', 'mdc-button--dense');
+            addToCartBtnAdmin.innerHTML = '<span class="mdc-button__ripple"></span><span class="mdc-button__icon" aria-hidden="true"><i class="fas fa-cart-plus"></i></span> <span class="mdc-button__label">Al Carrito</span>';
             addToCartBtnAdmin.dataset.productId = product.id;
             addToCartBtnAdmin.dataset.productName = product.name;
             addToCartBtnAdmin.dataset.productPrice = product.price_revista;
@@ -238,8 +265,7 @@ async function fetchAndDisplayProducts(filters = {}) {
     } catch (error) {
         console.error("Error fetching products:", error);
         if (productTableBody) {
-            // Adjusted colspan to 10 due to new Wishlist column
-            productTableBody.innerHTML = '<tr><td colspan="10">Error al cargar productos. Ver consola para más detalles.</td></tr>';
+            productTableBody.innerHTML = `<tr><td colspan="10">Error al cargar productos: ${error.message}. Ver consola para más detalles.</td></tr>`;
         }
     }
 }
@@ -304,43 +330,59 @@ async function handleAddToCartClick(event) {
 }
 
 
-// Event Listeners for Filters
-if (applyFiltersButton) {
-    applyFiltersButton.addEventListener('click', () => {
+// Event Listeners for New Filters
+if (applyProductFiltersButton) {
+    applyProductFiltersButton.addEventListener('click', () => {
         const filters = {
-            name: filterNameInput ? filterNameInput.value.trim() : '',
-            category: filterCategoryInput ? filterCategoryInput.value.trim() : ''
+            searchTerm: productSearchInput.value.trim(),
+            category: productCategoryFilterInput.value.trim(),
+            lowStock: productLowStockFilterCheckbox.checked
         };
         fetchAndDisplayProducts(filters);
     });
 }
 
-if (clearFiltersButton) {
-    clearFiltersButton.addEventListener('click', () => {
-        if(filterNameInput) filterNameInput.value = '';
-        if(filterCategoryInput) filterCategoryInput.value = '';
-        fetchAndDisplayProducts(); // Call with no filters
+if (clearProductFiltersButton) {
+    clearProductFiltersButton.addEventListener('click', () => {
+        if(productSearchInput) productSearchInput.value = '';
+        if(productCategoryFilterInput) productCategoryFilterInput.value = '';
+        if(productLowStockFilterCheckbox) productLowStockFilterCheckbox.checked = false;
+        fetchAndDisplayProducts(); // Call with no filters to reset
     });
 }
 
 
-// Handle Delete Product
+// Handle Delete Product (Ensure Authorization if backend requires it for DELETE)
 async function handleDeleteProduct(productId, productName) {
     if (!confirm(`¿Estás seguro de que deseas eliminar el producto "${productName}"?`)) {
         return;
     }
+    const token = getToken(); // Get token for authenticated request
+    if (!token) {
+        alert("No estás autenticado. Por favor, inicia sesión.");
+        if (typeof logout === 'function') logout(); else window.location.href = 'login.html';
+        return;
+    }
 
     try {
-        const response = await fetch(`/api/products/${productId}`, {
+        const response = await fetch(`${API_BASE_URL}/api/products/${productId}`, { // Use API_BASE_URL
             method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
         });
+
+        if (response.status === 401 || response.status === 403) {
+            alert("No autorizado para eliminar este producto. Serás deslogueado.");
+            if (typeof logout === 'function') logout(); else window.location.href = 'login.html';
+            return;
+        }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ detail: 'Error desconocido al eliminar el producto.' }));
             throw new Error(errorData.detail || `Error ${response.status} al eliminar el producto.`);
         }
 
-        // const result = await response.json(); // Contains {message: "..."}
         alert(`Producto "${productName}" eliminado con éxito.`);
         fetchAndDisplayProducts(); // Refresh the product list
 
@@ -353,6 +395,22 @@ async function handleDeleteProduct(productId, productName) {
 
 // Load products when the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("products.js DOMContentLoaded");
-    fetchAndDisplayProducts();
+    console.log("products.js DOMContentLoaded. Checking auth state.");
+    // Page protection: Ensure user is logged in AND is admin to view this page.
+    // This is a basic check. Robust protection should be on the backend.
+    if (typeof isLoggedIn === 'function' && isLoggedIn()) {
+        // Assuming an isAdmin function or similar check is available from auth.js
+        // For now, if logged in, try to fetch. Backend will enforce admin role.
+        console.log("User is logged in. Fetching products.");
+        fetchAndDisplayProducts(); // Initial fetch with no filters
+    } else {
+        console.log("User not logged in or auth functions not available. Redirecting to login.");
+        // Redirect to login if not authenticated
+        // Ensure auth.js is loaded and has already checked token validity by this point.
+        // If direct navigation to products.html, auth.js might not have finished.
+        // Better to rely on auth.js to redirect if needed, or have a global auth check.
+        // For now, if fetch fails due to 401/403, it will handle logout/redirect.
+        // If getToken() is null, fetchAndDisplayProducts will redirect.
+         fetchAndDisplayProducts(); // Attempt fetch; it will handle token absence.
+    }
 });

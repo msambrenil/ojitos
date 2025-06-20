@@ -27,20 +27,24 @@
     <main class="products-container">
         <h1>Gestión de Productos</h1>
 
-        <section class="filters-section">
-            <h2>Filtros</h2>
-            <div id="filter-controls">
-                <div class="form-field-group">
-                    <label for="filter-name">Filtrar por Nombre:</label>
-                    <input type="text" id="filter-name" name="filter_name" placeholder="Ej: Crema de manos">
+        <section class="filters-section product-filters" style="margin-bottom:20px;"> <!-- Added margin -->
+            <h2>Filtros de Productos</h2>
+            <div id="product-filter-controls" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;">
+                <div class="form-field-group" style="flex-grow: 2;">
+                    <label for="product-search">Buscar por Nombre/Descripción:</label>
+                    <input type="text" id="product-search" placeholder="Crema, exfoliante...">
                 </div>
-                <div class="form-field-group">
-                    <label for="filter-category">Filtrar por Categoría:</label>
-                    <input type="text" id="filter-category" name="filter_category" placeholder="Ej: Cuidados Diarios">
+                <div class="form-field-group" style="flex-grow: 1;">
+                    <label for="product-category-filter">Categoría:</label>
+                    <input type="text" id="product-category-filter" placeholder="Ej: Cuidados Diarios">
+                </div>
+                <div class="form-field-group" style="display: flex; align-items: center; padding-bottom: 10px;">
+                    <input type="checkbox" id="product-low-stock-filter" style="margin-right: 8px;">
+                    <label for="product-low-stock-filter">Solo Stock Bajo</label>
                 </div>
                 <div class="form-actions filter-actions">
-                    <button id="apply-filters-button" class="mdc-button">Aplicar Filtros</button>
-                    <button id="clear-filters-button" class="mdc-button">Limpiar Filtros</button>
+                    <button type="button" id="apply-product-filters-button" class="mdc-button">Aplicar</button>
+                    <button type="button" id="clear-product-filters-button" class="mdc-button mdc-button--outlined">Limpiar</button>
                 </div>
             </div>
         </section>
