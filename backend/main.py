@@ -10,11 +10,13 @@ from jose import jwt
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session, select
-from sqlalchemy import or_
+from sqlalchemy import or_, func # Added func
 from sqlalchemy.exc import IntegrityError # Added IntegrityError
 # typing.Optional is already imported at the top
 
 from passlib.context import CryptContext
+
+from .database import SaleStatusEnum # Ensure SaleStatusEnum is available for dashboard logic
 
 # JWT Configuration
 SECRET_KEY = "your-super-secret-key-that-should-be-in-env-var"
@@ -121,24 +123,60 @@ async def read_root():
 
 # Endpoints for dashboard cards (remain from previous step)
 @app.get("/api/dashboard/ventas-entregadas", response_model=CardData)
-async def get_ventas_entregadas():
-    return CardData(title="Ventas Entregadas", value="125")
+def get_dashboard_ventas_entregadas(session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        count = session.exec(select(func.count(Sale.id)).where(Sale.status == SaleStatusEnum.ENTREGADO, Sale.user_id == current_user.id)).one_or_none() or 0
+    else:
+        count = session.exec(select(func.count(Sale.id)).where(Sale.status == SaleStatusEnum.ENTREGADO)).one_or_none() or 0
+    return CardData(title="Ventas Entregadas", value=str(count))
 
 @app.get("/api/dashboard/a-entregar", response_model=CardData)
-async def get_a_entregar():
-    return CardData(title="A Entregar", value="30")
+def get_dashboard_a_entregar(session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        count = session.exec(select(func.count(Sale.id)).where(
+            or_(Sale.status == SaleStatusEnum.ARMADO, Sale.status == SaleStatusEnum.EN_CAMINO),
+            Sale.user_id == current_user.id
+        )).one_or_none() or 0
+    else:
+        count = session.exec(select(func.count(Sale.id)).where(
+            or_(Sale.status == SaleStatusEnum.ARMADO, Sale.status == SaleStatusEnum.EN_CAMINO)
+        )).one_or_none() or 0
+    return CardData(title="A Entregar", value=str(count))
 
 @app.get("/api/dashboard/por-armar", response_model=CardData)
-async def get_por_armar():
-    return CardData(title="Por Armar", value="15")
+def get_dashboard_por_armar(session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        count = session.exec(select(func.count(Sale.id)).where(
+            Sale.status == SaleStatusEnum.PENDIENTE_PREPARACION,
+            Sale.user_id == current_user.id
+        )).one_or_none() or 0
+    else:
+        count = session.exec(select(func.count(Sale.id)).where(Sale.status == SaleStatusEnum.PENDIENTE_PREPARACION)).one_or_none() or 0
+    return CardData(title="Por Armar", value=str(count))
 
 @app.get("/api/dashboard/cobradas", response_model=CardData)
-async def get_cobradas():
-    return CardData(title="Cobradas", value="S/. 10,500")
+def get_dashboard_cobradas(session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        total = session.exec(select(func.sum(Sale.total_amount)).where(
+            Sale.status == SaleStatusEnum.COBRADO,
+            Sale.user_id == current_user.id
+        )).one_or_none() or 0.0
+    else:
+        total = session.exec(select(func.sum(Sale.total_amount)).where(Sale.status == SaleStatusEnum.COBRADO)).one_or_none() or 0.0
+    return CardData(title="Cobradas", value=f"S/. {total:.2f}")
 
 @app.get("/api/dashboard/a-cobrar", response_model=CardData)
-async def get_a_cobrar():
-    return CardData(title="A Cobrar", value="S/. 2,300")
+def get_dashboard_a_cobrar(session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        total = session.exec(select(func.sum(Sale.total_amount)).where(
+            Sale.status == SaleStatusEnum.ENTREGADO,
+            Sale.user_id == current_user.id
+        )).one_or_none() or 0.0
+    else:
+        total = session.exec(select(func.sum(Sale.total_amount)).where(
+            Sale.status == SaleStatusEnum.ENTREGADO
+        )).one_or_none() or 0.0
+    return CardData(title="A Cobrar", value=f"S/. {total:.2f}")
 
 
 
@@ -179,17 +217,39 @@ async def create_product_endpoint(
     return db_product
 
 @products_router.get("/", response_model=List[ProductRead])
-def read_products_endpoint(
-    skip: int = 0,
-    limit: int = 100,
+def read_products_filtered( # Renamed
+    skip: int = 0, limit: int = 100,
+    search_term: Optional[str] = None,
     category: Optional[str] = None,
-    session: Session = Depends(get_session)
+    low_stock: Optional[bool] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user) # Added for protection
 ):
+    # Admin Protection
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access products list for admin"
+        )
+
     query = select(Product)
+
+    if search_term:
+        search_pattern = f"%{search_term}%"
+        query = query.where(or_(Product.name.ilike(search_pattern), Product.description.ilike(search_pattern)))
+
     if category:
-        query = query.where(Product.category == category)
-    query = query.offset(skip).limit(limit)
-    products = session.exec(query).all()
+        # Assuming category filter should be case-insensitive and partial match
+        category_pattern = f"%{category}%"
+        query = query.where(Product.category.ilike(category_pattern))
+
+    if low_stock is True:
+        # Ensure stock_critico is positive to avoid filtering items not managed by critical stock.
+        query = query.where(Product.stock_actual <= Product.stock_critico).where(Product.stock_critico > 0)
+
+    query = query.order_by(Product.id) # Consistent ordering
+    final_query = query.offset(skip).limit(limit)
+    products = session.exec(final_query).all()
     return products
 
 @products_router.get("/{product_id}", response_model=ProductRead)
