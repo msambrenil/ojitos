@@ -1,9 +1,10 @@
 from datetime import datetime
 from typing import Optional, Any, Dict, List
 
+import enum # Added enum import
 from sqlalchemy import create_engine, UniqueConstraint
 from sqlmodel import Field, Session, SQLModel, Relationship
-from pydantic import model_validator, computed_field # Added computed_field
+from pydantic import model_validator, computed_field
 
 
 DATABASE_URL = "sqlite:///./showroom_natura.db"
@@ -28,9 +29,9 @@ class User(UserBase, table=True):
     hashed_password: str
 
     client_profile: Optional["ClientProfile"] = Relationship(back_populates="user")
-    sales: List["Sale"] = Relationship(back_populates="user_as_client")
+    sales: List["Sale"] = Relationship(back_populates="user") # Standardized back_populates
     wishlist_items: List["WishlistItem"] = Relationship(back_populates="user")
-    cart: Optional["Cart"] = Relationship(back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}) # Added cart relationship
+    cart: Optional["Cart"] = Relationship(back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
 class UserCreate(UserBase): # For user creation, password is required
     password: str
@@ -164,27 +165,111 @@ class Client(SQLModel, table=True):
     phone: Optional[str] = None
 
 
-# Sale Model (Updated)
+# Sale Models (Updated Structure)
+
+# Minimal SaleBase for Pydantic schemas (like SaleUpdate, part of SaleRead)
 class SaleBase(SQLModel):
-    sale_date: datetime = Field(default_factory=datetime.utcnow)
-    total_amount: float
-    status: str  # e.g., "Por Armar", "A Entregar", "Entregada", "Cobrada"
+    status: SaleStatusEnum = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION)
+    discount_amount: Optional[float] = Field(default=0.0)
+    # Note: total_amount and points_earned are calculated/set by logic, not direct base input for update.
 
-class Sale(SaleBase, table=True):
+class Sale(SQLModel, table=True): # Table Model
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", index=True) # Renamed from client_id, linked to User, indexed
+    user_id: int = Field(foreign_key="user.id", index=True)
+    sale_date: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
 
-    # Relationship to User (as the client who made the purchase)
-    user_as_client: Optional[User] = Relationship(back_populates="sales")
-    # If you also need to track which user (e.g. salesperson) registered the sale,
-    # you would add another field like `registered_by_user_id` and another relationship.
+    status: SaleStatusEnum = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION, index=True, nullable=False)
 
-class SaleRead(SaleBase):
+    total_amount: float = Field(default=0.0) # Calculated and stored by application logic
+    discount_amount: Optional[float] = Field(default=0.0)
+    points_earned: Optional[int] = Field(default=0) # Calculated and stored by application logic
+
+    # Relationships
+    user: User = Relationship(back_populates="sales") # Standardized relationship
+    items: List["SaleItem"] = Relationship(back_populates="sale", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+
+
+# SaleRead will be defined after SaleItem, SaleItemRead are defined, as it might include items.
+# For now, let's update the old SaleRead to match the new SaleBase structure,
+# but it will be expanded later.
+class SaleRead(SaleBase): # Temporary update, will be expanded
     id: int
-    user_id: int # Changed from client_id to match Sale model
+    user_id: int
+    sale_date: datetime
+    updated_at: datetime
+    total_amount: float
+    points_earned: Optional[int]
 
-# Note: The existing Client model might be for something else, or might be redundant if users are always clients.
-# For now, focusing on Sale being linked to User via user_id.
+
+# --- SaleItem Models ---
+class SaleItemBase(SQLModel):
+    product_id: int = Field(gt=0)
+    quantity: int = Field(gt=0)
+    price_at_sale: Optional[float] = Field(default=None, ge=0) # Optional at creation, to be resolved by logic
+
+class SaleItem(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sale_id: int = Field(foreign_key="sale.id", index=True, nullable=False)
+    product_id: int = Field(foreign_key="product.id", index=True, nullable=False)
+    quantity: int = Field(gt=0, nullable=False)
+
+    price_at_sale: float = Field(ge=0, nullable=False) # Actual price used, required in DB
+    subtotal: float = Field(default=0.0, ge=0, nullable=False) # Calculated: quantity * price_at_sale
+
+    # Relationships
+    sale: "Sale" = Relationship(back_populates="items")
+    product: "Product" = Relationship() # Uni-directional to Product is fine
+
+
+class SaleItemCreate(SaleItemBase):
+    pass # Inherits product_id, quantity, price_at_sale (optional)
+
+class SaleItemRead(SaleItemBase):
+    id: int
+    subtotal: float # This will be populated by app logic before response
+    product: "ProductRead"
+
+
+# Schemas for Sale operations
+class SaleCreate(SQLModel):
+    user_id: Optional[int] = None # Admin can set this; for self-service, taken from current_user
+    status: Optional[SaleStatusEnum] = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION)
+    discount_amount: Optional[float] = Field(default=0.0, ge=0)
+    items: List[SaleItemCreate]
+
+
+class SaleUpdate(SaleBase): # Inherits status, discount_amount from SaleBase
+    pass # Add other specific fields an admin might update on Sale itself if any
+
+
+# Redefine SaleRead to include SaleItemRead and UserRead
+class SaleRead(SaleBase): # Inherits status, discount_amount
+    id: int
+    user_id: int
+    sale_date: datetime
+    updated_at: datetime
+    items: List[SaleItemRead] = []
+
+    total_amount: float
+    points_earned: int
+
+    user: Optional[UserRead] = None # Embed basic user info
+
+
+# Note: The existing Client model might be for something else.
+
+# --- Sale Status Enum ---
+class SaleStatusEnum(str, enum.Enum):
+    PENDIENTE_PREPARACION = "pendiente_preparacion" # Default initial state
+    ARMADO = "armado"                             # Order is assembled
+    EN_CAMINO = "en_camino"                       # Order is out for delivery
+    ENTREGADO = "entregado"                       # Order has been delivered
+    COBRADO = "cobrado"                           # Payment has been confirmed
+    CANCELADO = "cancelado"                       # Order was cancelled
+    # PENDIENTE_PAGO = "pendiente_pago"
+    # PAGO_RECHAZADO = "pago_rechazado"
+    # DEVUELTO = "devuelto"
 
 
 # --- User's Own Profile Update Schema ---
