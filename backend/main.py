@@ -879,13 +879,309 @@ app.include_router(my_profile_router)
 
 
 # --- User Specific Data Router (e.g., Sales History) ---
+# This router is already defined and included below.
+
+# --- Sales Router (New for creating and managing sales by admin/system) ---
+sales_router = APIRouter(
+    prefix="/api/sales",
+    tags=["Sales Management"],
+    # dependencies=[Depends(get_current_active_user)] # Protect all sales routes
+    # Or apply dependency per-endpoint if some are public/different access levels
+)
+
+from .database import SaleCreate, SaleItem, SaleStatusEnum # Ensure SaleItem and SaleStatusEnum are imported
+
+@sales_router.post("/", response_model=SaleRead, status_code=status.HTTP_201_CREATED)
+def create_sale(
+    sale_in: SaleCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user) # For setting user_id if not admin, or for audit
+):
+    # Determine the user_id for the sale
+    # If an admin can create a sale for another user:
+    if current_user.is_superuser and sale_in.user_id is not None:
+        target_user_id = sale_in.user_id
+        target_user = session.get(User, target_user_id)
+        if not target_user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {target_user_id} not found.")
+    else: # Regular user creating sale for themselves, or admin creating for self
+        target_user_id = current_user.id
+
+    # Validate products and calculate total_amount and points_earned
+    calculated_total_amount = 0.0
+    calculated_points_earned = 0 # Example: 1 point per 10 S/.
+
+    db_sale_items = []
+    for item_create in sale_in.items:
+        product = session.get(Product, item_create.product_id)
+        if not product:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with id {item_create.product_id} not found.")
+
+        # TODO: Stock check
+        # if product.stock_actual < item_create.quantity:
+        #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Not enough stock for product {product.name}.")
+
+        price_at_sale = item_create.price_at_sale if item_create.price_at_sale is not None else product.price_feria # Default to price_feria if not specified
+        if price_at_sale is None: # Still None? Fallback to price_revista
+            price_at_sale = product.price_revista
+
+        subtotal = item_create.quantity * price_at_sale
+        calculated_total_amount += subtotal
+
+        db_item = SaleItem(
+            product_id=item_create.product_id,
+            quantity=item_create.quantity,
+            price_at_sale=price_at_sale,
+            subtotal=subtotal
+            # sale_id will be set by relationship
+        )
+        db_sale_items.append(db_item)
+        # product.stock_actual -= item_create.quantity # Decrement stock
+        # session.add(product) # Add product to session to save stock change
+
+    # Apply discount
+    final_total_amount = calculated_total_amount - (sale_in.discount_amount or 0.0)
+    if final_total_amount < 0:
+        final_total_amount = 0 # Cannot be negative
+
+    calculated_points_earned = int(final_total_amount / 10) # Example points logic
+
+    # Create Sale object
+    db_sale = Sale(
+        user_id=target_user_id,
+        status=sale_in.status or SaleStatusEnum.PENDIENTE_PREPARACION,
+        discount_amount=sale_in.discount_amount or 0.0,
+        total_amount=final_total_amount,
+        points_earned=calculated_points_earned,
+        items=db_sale_items, # Assign items to the sale
+        sale_date=datetime.now(timezone.utc), # Set current time
+        updated_at=datetime.now(timezone.utc)
+    )
+
+    session.add(db_sale)
+    try:
+        session.commit()
+        session.refresh(db_sale)
+        # Refresh items to get their IDs and correctly link back to sale for response model
+        for item_in_db in db_sale.items:
+            session.refresh(item_in_db)
+            if item_in_db.product: # Ensure product is loaded for SaleItemRead
+                pass
+        if db_sale.user: # Ensure user is loaded if UserRead is part of SaleRead
+            pass
+    except IntegrityError as e: # Catch potential DB errors
+        session.rollback()
+        print(f"IntegrityError creating sale: {e}")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Sale could not be created due to a data conflict.")
+    except Exception as e:
+        session.rollback()
+        print(f"Generic error creating sale: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while creating the sale.")
+
+    return db_sale
+
+
+from datetime import date, time # Ensure date and time are explicitly imported
+
+@sales_router.get("/", response_model=List[SaleRead])
+def read_sales(
+    skip: int = 0,
+    limit: int = 100,
+    user_id_on_filter: Optional[int] = None,
+    status_filter: Optional[SaleStatusEnum] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    query = select(Sale)
+
+    if not current_user.is_superuser:
+        if user_id_on_filter is not None and user_id_on_filter != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view sales for this user")
+        query = query.where(Sale.user_id == current_user.id)
+    elif user_id_on_filter is not None:
+        target_user = session.get(User, user_id_on_filter)
+        if not target_user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id {user_id_on_filter} not found for filtering.")
+        query = query.where(Sale.user_id == user_id_on_filter)
+
+    if status_filter is not None:
+        query = query.where(Sale.status == status_filter)
+
+    if date_from is not None:
+        datetime_from = datetime.combine(date_from, time.min)
+        query = query.where(Sale.sale_date >= datetime_from)
+
+    if date_to is not None:
+        datetime_to = datetime.combine(date_to, time.max)
+        query = query.where(Sale.sale_date <= datetime_to)
+
+    query = query.order_by(Sale.sale_date.desc(), Sale.id.desc()).offset(skip).limit(limit)
+
+    sales = session.exec(query).all()
+    return sales
+
+@sales_router.get("/{sale_id}", response_model=SaleRead)
+def read_single_sale(
+    sale_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    db_sale = session.get(Sale, sale_id)
+
+    if not db_sale:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
+
+    # Authorization check
+    if not current_user.is_superuser and db_sale.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this sale")
+
+    # Pydantic serialization via SaleRead will handle accessing db_sale.items and db_sale.user
+    # Ensure related data is loaded if not automatically by SQLModel/Pydantic for the response model.
+    # Accessing them can trigger lazy loads if necessary.
+    if db_sale.items: pass
+    if db_sale.user: pass
+
+    return db_sale
+
+from .database import SaleUpdate, SaleStatusEnum, SaleItem # Ensure these are imported
+
+@sales_router.put("/{sale_id}", response_model=SaleRead)
+def update_sale_details(
+    sale_id: int,
+    sale_update: SaleUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    # Authorization: Only Admin can update sales
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update sales")
+
+    db_sale = session.get(Sale, sale_id)
+    if not db_sale:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
+
+    previous_status = db_sale.status
+    update_data = sale_update.model_dump(exclude_unset=True) # Get only provided fields
+
+    # Update discount first if provided, as it affects total_amount
+    if "discount_amount" in update_data and update_data["discount_amount"] is not None:
+        db_sale.discount_amount = update_data["discount_amount"]
+        # Recalculate total_amount based on existing item subtotals
+        current_items_total = sum(item.subtotal for item in db_sale.items if item.subtotal is not None)
+        db_sale.total_amount = round(current_items_total - (db_sale.discount_amount or 0.0), 2)
+        if db_sale.total_amount < 0: db_sale.total_amount = 0.0 # Ensure not negative
+
+        # Recalculate points based on new total_amount (example logic)
+        db_sale.points_earned = int(db_sale.total_amount / 10)
+
+    # Update status
+    if "status" in update_data and update_data["status"] is not None:
+        new_status_str = update_data["status"]
+        try:
+            new_status = SaleStatusEnum(new_status_str) # Convert string from Pydantic to Enum
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid sale status: {new_status_str}")
+
+        if new_status == SaleStatusEnum.CANCELADO and previous_status != SaleStatusEnum.CANCELADO:
+            # Revert stock for each item in the sale
+            for item in db_sale.items:
+                product = session.get(Product, item.product_id)
+                if product:
+                    product.stock_actual += item.quantity
+                    session.add(product)
+                else:
+                    # Log error: Product associated with sale item not found, cannot revert stock.
+                    print(f"Warning: Product ID {item.product_id} for SaleItem ID {item.id} not found. Stock not reverted.")
+        db_sale.status = new_status # Assign the enum value
+
+    db_sale.updated_at = datetime.now(timezone.utc)
+    session.add(db_sale)
+
+    try:
+        session.commit()
+        session.refresh(db_sale)
+        # Refresh related items and their products for the response model.
+        for item_in_sale in db_sale.items:
+            session.refresh(item_in_sale)
+            if item_in_sale.product:
+                session.refresh(item_in_sale.product)
+        if db_sale.user:
+            session.refresh(db_sale.user)
+
+    except Exception as e:
+        session.rollback()
+        print(f"Error updating sale details: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating sale: {str(e)}")
+
+    return db_sale
+
+@sales_router.delete("/{sale_id}", response_model=SaleRead)
+def cancel_sale_by_admin(
+    sale_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    # Authorization: Only Admin can cancel sales
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to cancel sales")
+
+    db_sale = session.get(Sale, sale_id)
+    if not db_sale:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
+
+    if db_sale.status == SaleStatusEnum.CANCELADO:
+        # Sale is already cancelled, refresh relations for consistent response and return
+        session.refresh(db_sale)
+        for item_in_sale in db_sale.items: # Ensure items and their products are loaded
+            session.refresh(item_in_sale)
+            if item_in_sale.product:
+                session.refresh(item_in_sale.product)
+        if db_sale.user: # Ensure user is loaded
+            session.refresh(db_sale.user)
+        return db_sale
+
+    # Stock Management on Cancellation: Revert stock for each item in the sale
+    for item in db_sale.items:
+        product = session.get(Product, item.product_id)
+        if product:
+            product.stock_actual += item.quantity
+            session.add(product)
+        else:
+            print(f"Warning: Product ID {item.product_id} for SaleItem ID {item.id} not found during sale cancellation. Stock not reverted for this item.")
+
+    db_sale.status = SaleStatusEnum.CANCELADO
+    db_sale.updated_at = datetime.now(timezone.utc)
+    session.add(db_sale)
+
+    try:
+        session.commit()
+        session.refresh(db_sale)
+        for item_in_sale in db_sale.items:
+            session.refresh(item_in_sale)
+            if item_in_sale.product:
+                session.refresh(item_in_sale.product)
+        if db_sale.user:
+            session.refresh(db_sale.user)
+
+    except Exception as e:
+        session.rollback()
+        print(f"Error cancelling sale: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error cancelling sale: {str(e)}")
+
+    return db_sale
+
+app.include_router(sales_router)
+
+# --- User Specific Data Router (e.g., Sales History) ---
 user_data_router = APIRouter(
     prefix="/api/users",
     tags=["User Data"]
     # Consider adding dependencies=[Depends(get_current_active_user)] if all routes here are protected
 )
 
-from .database import Sale, SaleRead # Ensure SaleRead is imported
+from .database import Sale, SaleRead # This import might be redundant if already imported globally for other routers
 
 @user_data_router.get("/{user_id}/sales/", response_model=List[SaleRead])
 async def get_user_sales_history(
