@@ -1156,3 +1156,50 @@ input.quantity-input:focus {
     /* box-shadow: var(--card-shadow); if using a shadow variable */
     border: 1px dashed var(--card-border-color); /* Dashed border for empty message */
 }
+
+/* Config Admin Page */
+.config-admin-container fieldset.card-like {
+    margin-bottom: 25px;
+    border: 1px solid var(--card-border-color); /* Fieldset default border can be browser-specific */
+    padding: 20px; /* Match card-like padding */
+    border-radius: 8px; /* Added for consistency with .card-like */
+    box-shadow: 0 1px 3px var(--card-shadow-color); /* Added for consistency */
+}
+.config-admin-container fieldset.card-like legend {
+    font-size: 1.2em;
+    font-weight: bold;
+    padding: 0 10px; /* Spacing around legend text */
+    color: var(--primary-color);
+}
+.config-admin-container input[type="color"] {
+    min-height: 30px; /* Ensure color input is not too small */
+    padding: 2px; /* Minimal padding for color swatch */
+    border: 1px solid var(--card-border-color);
+    border-radius: 4px;
+    width: 100px; /* Or suitable width */
+    cursor: pointer; /* Indicate it's interactive */
+}
+.success-message {
+    color: var(--success-color, #2E7D32); /* Define in :root if not present */
+    background-color: var(--success-background-color, rgba(46, 125, 50, 0.1)); /* Define in :root */
+    padding: 12px 15px; /* Consistent with error-message */
+    border-radius: 4px;
+    margin-bottom: 20px; /* Consistent with error-message */
+    border: 1px solid var(--success-border-color, #2E7D32); /* Define in :root */
+    text-align: left;
+    font-size: 0.9em;
+}
+
+/* Add success color variables to :root and body.dark-mode if they are not already there */
+/* Example:
+:root {
+    --success-color: #2E7D32;
+    --success-background-color: rgba(46, 125, 50, 0.1);
+    --success-border-color: #2E7D32;
+}
+body.dark-mode {
+    --success-color: #66BB6A;
+    --success-background-color: rgba(102, 187, 106, 0.15);
+    --success-border-color: #66BB6A;
+}
+*/

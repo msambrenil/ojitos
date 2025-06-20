@@ -1,4 +1,16 @@
 const API_BASE_URL = ''; // Assuming API is served from the same origin, or set appropriately
+const USER_INFO_KEY = 'currentUserInfo';
+
+function getCurrentUserInfo() {
+    try {
+        const userInfoJson = localStorage.getItem(USER_INFO_KEY);
+        return userInfoJson ? JSON.parse(userInfoJson) : null;
+    } catch (error) {
+        console.error("Error parsing current user info from localStorage:", error);
+        localStorage.removeItem(USER_INFO_KEY); // Clear corrupted data
+        return null;
+    }
+}
 
 async function login(email, password) {
     try {
@@ -48,27 +60,48 @@ async function login(email, password) {
             }
             // End of Cart Merge Logic
 
+            // Fetch user details to get is_superuser flag
+            try {
+                const profileResponse = await fetch(`${API_BASE_URL}/api/me/profile/`, {
+                    headers: { 'Authorization': `Bearer ${data.access_token}` }
+                });
+                if (profileResponse.ok) {
+                    const userProfileData = await profileResponse.json();
+                    const userInfoToStore = {
+                        email: userProfileData.email,
+                        fullName: userProfileData.full_name,
+                        isSuperuser: userProfileData.is_superuser
+                    };
+                    localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfoToStore));
+                    console.log("User info (including role) stored in localStorage.");
+                } else {
+                    console.warn("Could not fetch user profile after login to determine role.");
+                    localStorage.removeItem(USER_INFO_KEY);
+                }
+            } catch (error) {
+                console.error("Error fetching user profile after login:", error);
+                localStorage.removeItem(USER_INFO_KEY);
+            }
+
             localStorage.setItem('accessToken', data.access_token);
             console.log('Login successful, token stored.');
-            updateAuthUI(); // Update UI (will also call updateCartIndicator which fetches the now merged cart)
-            window.location.href = 'my_profile.html'; // Redirect
+            updateAuthUI();
+            window.location.href = 'my_profile.html';
             return true;
         } else {
             throw new Error('Token no recibido del servidor.');
         }
     } catch (error) {
         console.error('Error in login function:', error);
-        // alert(error.message); // Error is typically displayed by the calling form
-        return false; // Indicate failure
+        return false;
     }
 }
 
 function logout() {
     localStorage.removeItem('accessToken');
-    console.log('Logged out, token removed.');
-    updateAuthUI(); // Update UI after removing token
-    // Redirection is handled by the event listener in DOMContentLoaded for the logout button,
-    // or should be handled by the calling code if logout() is invoked programmatically elsewhere.
+    localStorage.removeItem(USER_INFO_KEY); // Remove user info on logout
+    console.log('Logged out, token and user info removed.');
+    updateAuthUI();
 }
 
 function getToken() {
@@ -148,41 +181,48 @@ function updateAuthUI() {
     const logoutButton = document.getElementById('nav-logout-button');
     const userGreeting = document.getElementById('user-greeting');
     const adminClientsLink = document.getElementById('nav-admin-clients-link');
+    const adminConfigLink = document.getElementById('nav-admin-config-link'); // Get new link
     const wishlistLink = document.getElementById('nav-wishlist-link');
-    const navCartLink = document.getElementById('nav-cart-link'); // Added cart link ref
+    const navCartLink = document.getElementById('nav-cart-link');
+
+    const currentUserInfo = getCurrentUserInfo(); // Get stored user info
 
     if (isLoggedIn()) {
         if (loginLink) loginLink.style.display = 'none';
         if (profileLink) profileLink.style.display = 'inline';
         if (wishlistLink) wishlistLink.style.display = 'inline';
-        if (navCartLink) navCartLink.style.display = 'inline'; // Show cart link
+        if (navCartLink) navCartLink.style.display = 'inline';
         if (logoutButton) logoutButton.style.display = 'inline-block';
-        if (userGreeting) {
+
+        if (currentUserInfo && userGreeting) {
+            userGreeting.textContent = `Hola, ${currentUserInfo.fullName || currentUserInfo.email}!`;
             userGreeting.style.display = 'inline';
-            // TODO: Fetch actual user data to display name/email.
-            // For now, a generic greeting or leave it empty until data is fetched.
-            // Example: userGreeting.textContent = 'Bienvenido!';
-            // Placeholder, real data fetch needed for user's name/email
+        } else if (userGreeting) { // Fallback if no info, but should be rare if login fetches it
+            userGreeting.textContent = 'Hola!';
+            userGreeting.style.display = 'inline';
         }
-        // Future: Add logic for adminClientsLink visibility based on user role
-        // if (adminClientsLink && userHasAdminRole()) { // userHasAdminRole() would check token claims or user data
-        //     adminClientsLink.style.display = 'inline';
-        // } else if (adminClientsLink) {
-        //     adminClientsLink.style.display = 'none';
-        // }
+
+        if (currentUserInfo && currentUserInfo.isSuperuser) {
+            if (adminClientsLink) adminClientsLink.style.display = 'inline';
+            if (adminConfigLink) adminConfigLink.style.display = 'inline';
+        } else {
+            if (adminClientsLink) adminClientsLink.style.display = 'none';
+            if (adminConfigLink) adminConfigLink.style.display = 'none';
+        }
 
     } else {
         if (loginLink) loginLink.style.display = 'inline';
         if (profileLink) profileLink.style.display = 'none';
         if (wishlistLink) wishlistLink.style.display = 'none';
-        if (navCartLink) navCartLink.style.display = 'none'; // Hide cart link
+        if (navCartLink) navCartLink.style.display = 'none';
         if (logoutButton) logoutButton.style.display = 'none';
         if (userGreeting) {
             userGreeting.style.display = 'none';
             userGreeting.textContent = '';
         }
+        if (adminClientsLink) adminClientsLink.style.display = 'none';
+        if (adminConfigLink) adminConfigLink.style.display = 'none';
     }
-    // This call will now also update the cart indicator based on login state
     updateCartIndicator();
 }
 

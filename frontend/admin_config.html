@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración del Sitio - Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <a href="index.html">Showroom Natura OjitOs</a> <!-- Will be updated by config -->
+        </div>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+            <a href="products.html" class="nav-link">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
+            <a href="admin_config.html" class="nav-link" id="nav-admin-config-link" style="display:none;">Admin Config</a> <!-- Link to self, for admin role -->
+            <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
+            <a href="my_cart.html" class="nav-link" id="nav-cart-link" style="display:none;"><i class="fas fa-shopping-cart"></i> Carrito (<span id="cart-item-count">0</span>)</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <span id="user-greeting" style="display:none;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">🌙</button>
+    </header>
+
+    <main class="page-container config-admin-container">
+        <h1>Configuración del Sitio</h1>
+        <form id="site-config-form" class="styled-form">
+
+            <fieldset class="card-like">
+                <legend>Personalización de Marca</legend>
+                <div class="form-field-group">
+                    <label for="config-site-name">Nombre del Sitio:</label>
+                    <input type="text" id="config-site-name" name="site_name">
+                </div>
+                <div class="form-field-group">
+                    <label for="config-contact-email">Email de Contacto:</label>
+                    <input type="email" id="config-contact-email" name="contact_email">
+                </div>
+                <div class="form-field-group">
+                    <label for="config-contact-phone">Teléfono de Contacto:</label>
+                    <input type="tel" id="config-contact-phone" name="contact_phone">
+                </div>
+                <div class="form-field-group">
+                    <label for="config-color-primary">Color Primario:</label>
+                    <input type="color" id="config-color-primary" name="color_primary" value="#E83E8C">
+                </div>
+                <div class="form-field-group">
+                    <label for="config-color-secondary">Color Secundario:</label>
+                    <input type="color" id="config-color-secondary" name="color_secondary" value="#FF7F00">
+                </div>
+                <div class="form-field-group">
+                    <label for="config-color-accent">Color de Acento:</label>
+                    <input type="color" id="config-color-accent" name="color_accent" value="#4CAF50">
+                </div>
+            </fieldset>
+
+            <fieldset class="card-like">
+                <legend>Logo del Sitio</legend>
+                <div class="form-field-group">
+                    <label for="config-logo-upload">Subir nuevo logo:</label>
+                    <input type="file" id="config-logo-upload" name="logo_upload" accept="image/png, image/jpeg, image/svg+xml, image/webp">
+                </div>
+                <div id="config-logo-preview-container">
+                    <p>Logo Actual:</p>
+                    <img id="config-logo-preview" src="images/logo_placeholder.png" alt="Logo Preview" style="max-width: 200px; max-height: 100px; object-fit: contain; border: 1px solid var(--card-border-color);">
+                     <!-- Ensure 'images/logo_placeholder.png' exists or use a valid path/default -->
+                </div>
+            </fieldset>
+
+            <fieldset class="card-like">
+                <legend>Redes Sociales</legend>
+                <div class="form-field-group"><label for="config-social-instagram">Instagram URL:</label><input type="url" id="config-social-instagram" name="social_instagram_url"></div>
+                <div class="form-field-group"><label for="config-social-tiktok">TikTok URL:</label><input type="url" id="config-social-tiktok" name="social_tiktok_url"></div>
+                <div class="form-field-group"><label for="config-social-whatsapp">WhatsApp URL (wa.me/...):</label><input type="url" id="config-social-whatsapp" name="social_whatsapp_url"></div>
+                <div class="form-field-group"><label for="config-online-fair">Link Feria Online:</label><input type="url" id="config-online-fair" name="online_fair_url"></div>
+            </fieldset>
+
+            <fieldset class="card-like">
+                <legend>Dirección</legend>
+                <div class="form-field-group">
+                    <label for="config-showroom-address">Dirección del Showroom:</label>
+                    <textarea id="config-showroom-address" name="showroom_address" rows="3"></textarea>
+                </div>
+            </fieldset>
+
+            <fieldset class="card-like">
+                <legend>Parámetros del Sistema</legend>
+                <div class="form-field-group">
+                    <label for="config-points-per-unit">Puntos por Unidad Monetaria (ej. 0.1 para 1 punto por S/.10):</label>
+                    <input type="number" id="config-points-per-unit" name="system_param_points_per_currency_unit" step="0.01" min="0">
+                </div>
+                <div class="form-field-group">
+                    <label for="config-showroom-discount">Descuento Showroom por Defecto (%):</label>
+                    <input type="number" id="config-showroom-discount" name="system_param_default_showroom_discount_percentage" step="1" min="0" max="100">
+                </div>
+            </fieldset>
+
+            <div id="config-error-message" class="error-message" style="display: none;"></div>
+            <div id="config-success-message" class="success-message" style="display: none;"></div>
+
+            <div class="form-actions" style="margin-top:25px;">
+                <button type="submit" id="save-config-button" class="mdc-button mdc-button--raised">Guardar Configuración</button>
+            </div>
+        </form>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Showroom Natura OjitOs</p> <!-- Will be updated by config -->
+    </footer>
+
+    <script src="js/cart_guest.js" defer></script>
+    <script src="js/auth.js" defer></script>
+    <script src="js/admin_config.js" defer></script>
+    <script>
+        // Page Protection (Basic - checks login, admin role check is on backend for save)
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!isLoggedIn()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            // updateAuthUI() called by auth.js to set header links correctly.
+            // A more robust admin page protection would check user role here too after fetching user data.
+        });
+    </script>
+</body>
+</html>

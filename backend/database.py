@@ -372,3 +372,77 @@ class CartRead(SQLModel): # For API response for the whole cart
             if item.product and isinstance(item.product.price_revista, (int, float)):
                 total += item.quantity * item.product.price_revista
         return round(total, 2)
+
+
+# --- Site Configuration Model ---
+class SiteConfiguration(SQLModel, table=True):
+    # Using a fixed ID to enforce a singleton pattern (only one row in this table)
+    # The application logic will always try to get/update the row with id=1.
+    id: Optional[int] = Field(default=1, primary_key=True, nullable=False)
+
+    site_name: Optional[str] = Field(default="Showroom Natura OjitOs", max_length=255)
+    contact_email: Optional[str] = Field(default=None, max_length=255)
+    contact_phone: Optional[str] = Field(default=None, max_length=50)
+    logo_url: Optional[str] = Field(default=None, max_length=512) # URL or path to logo
+
+    # Brand Colors (stored as hex, e.g., "#RRGGBB")
+    color_primary: Optional[str] = Field(default="#E83E8C", max_length=7) # Example: Natura Pink
+    color_secondary: Optional[str] = Field(default="#FF7F00", max_length=7) # Example: Natura Orange
+    color_accent: Optional[str] = Field(default="#4CAF50", max_length=7)  # Example: Natura Green
+
+    # Social Media Links
+    social_instagram_url: Optional[str] = Field(default=None, max_length=512)
+    social_tiktok_url: Optional[str] = Field(default=None, max_length=512)
+    social_whatsapp_url: Optional[str] = Field(default=None, max_length=512) # e.g., wa.me link
+    online_fair_url: Optional[str] = Field(default=None, max_length=512)
+
+    # Physical Address
+    showroom_address: Optional[str] = Field(default=None, max_length=1024) # Free text or structured JSON string
+
+    # System Parameters
+    system_param_points_per_currency_unit: Optional[float] = Field(default=0.1, ge=0) # e.g., 0.1 points per S/.1
+    system_param_default_showroom_discount_percentage: Optional[int] = Field(default=20, ge=0, le=100)
+
+    # Timestamps
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column_kwargs={"onupdate": datetime.utcnow},
+        nullable=False
+    )
+
+
+# --- Site Configuration Pydantic Schemas ---
+class SiteConfigurationRead(SQLModel):
+    # Based on SiteConfiguration table model, id is not usually sent to client for singleton config
+    site_name: str # Has default in table, so expected in read
+    contact_email: Optional[str]
+    contact_phone: Optional[str]
+    logo_url: Optional[str] # URL for the logo, managed by separate endpoint
+    color_primary: str # Has default
+    color_secondary: str # Has default
+    color_accent: str # Has default
+    social_instagram_url: Optional[str]
+    social_tiktok_url: Optional[str]
+    social_whatsapp_url: Optional[str]
+    online_fair_url: Optional[str]
+    showroom_address: Optional[str]
+    system_param_points_per_currency_unit: float # Has default
+    system_param_default_showroom_discount_percentage: int # Has default
+    updated_at: datetime
+
+class SiteConfigurationUpdate(SQLModel):
+    site_name: Optional[str] = Field(default=None, max_length=255)
+    contact_email: Optional[str] = Field(default=None, max_length=255)
+    contact_phone: Optional[str] = Field(default=None, max_length=50)
+    # logo_url is managed by a separate endpoint, not included here.
+    color_primary: Optional[str] = Field(default=None, max_length=7) # Hex color validation can be added with custom validator if needed
+    color_secondary: Optional[str] = Field(default=None, max_length=7)
+    color_accent: Optional[str] = Field(default=None, max_length=7)
+    social_instagram_url: Optional[str] = Field(default=None, max_length=512)
+    social_tiktok_url: Optional[str] = Field(default=None, max_length=512)
+    social_whatsapp_url: Optional[str] = Field(default=None, max_length=512)
+    online_fair_url: Optional[str] = Field(default=None, max_length=512)
+    showroom_address: Optional[str] = Field(default=None, max_length=1024)
+    system_param_points_per_currency_unit: Optional[float] = Field(default=None, ge=0)
+    system_param_default_showroom_discount_percentage: Optional[int] = Field(default=None, ge=0, le=100)
+    # id and updated_at are not directly updatable by client.

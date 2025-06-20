@@ -92,7 +92,8 @@ from .database import (
     Product,
     ProductCreate,
     ProductRead,
-    ProductUpdate
+    ProductUpdate,
+    SiteConfiguration  # Added SiteConfiguration import
 )
 
 
@@ -108,9 +109,31 @@ def get_session():
     with Session(engine) as session:
         yield session
 
+# Site Configuration Initialization
+def initialize_site_configuration(session: Session):
+    db_config = session.get(SiteConfiguration, 1) # ID is fixed to 1
+
+    if not db_config:
+        print("No site configuration found, creating one with default values...")
+        new_config = SiteConfiguration() # Defaults are set in the model
+        session.add(new_config)
+        try:
+            session.commit()
+            session.refresh(new_config)
+            print("Default site configuration created successfully.")
+        except Exception as e:
+            session.rollback()
+            print(f"Error creating default site configuration: {e}")
+    else:
+        print("Site configuration already exists.")
+
 @app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
+def on_app_startup(): # Renamed
+    create_db_and_tables() # Creates all tables, including SiteConfiguration
+
+    # Initialize site configuration using a new session
+    with Session(engine) as session: # engine is imported from .database
+        initialize_site_configuration(session)
 
 # Pydantic model for card data (remains from previous step)
 class CardData(BaseModel):
