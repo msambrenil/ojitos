@@ -3,33 +3,66 @@
 
 let currentLoggedInUserId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+// Global DOM element declarations (assignments happen in DOMContentLoaded)
+let viewFullname, viewEmail, viewNickname, viewWhatsapp, viewGender, viewClientLevel, viewAvailablePoints;
+let editProfileForm, editNicknameInput, editWhatsappInput, editGenderSelect, editProfileErrorMessageDiv;
+let currentProfileImage, removeProfileImageButton, profileImageUploadInput, uploadProfileImageButton, imageUploadErrorMessageDiv;
+let viewMyPurchaseHistoryButton;
+let myRedemptionsTableBody, noMyRedemptionsMessage;
+
+
+// Redemption Request Statuses
+const RedemptionRequestStatusEnum = {
+    PENDIENTE_APROBACION: "pendiente_aprobacion",
+    APROBADO_POR_ENTREGAR: "aprobado_por_entregar",
+    ENTREGADO: "entregado",
+    RECHAZADO: "rechazado",
+    CANCELADO_POR_CLIENTE: "cancelado_por_cliente"
+};
+const RedemptionRequestStatusDisplay = {
+    [RedemptionRequestStatusEnum.PENDIENTE_APROBACION]: "Pendiente de Aprobación",
+    [RedemptionRequestStatusEnum.APROBADO_POR_ENTREGAR]: "Aprobado (Por Entregar)",
+    [RedemptionRequestStatusEnum.ENTREGADO]: "Entregado",
+    [RedemptionRequestStatusEnum.RECHAZADO]: "Rechazado",
+    [RedemptionRequestStatusEnum.CANCELADO_POR_CLIENTE]: "Cancelado por Cliente"
+};
+
+
+document.addEventListener('DOMContentLoaded', async () => { // Made async
     // Page protection (redirect if not logged in) is handled by an inline script in my_profile.html
     // updateAuthUI() is called by auth.js's own DOMContentLoaded listener
 
-    // DOM Element References
-    const viewFullname = document.getElementById('view-fullname');
+    // Assign DOM Element References
+    viewFullname = document.getElementById('view-fullname');
     const viewEmail = document.getElementById('view-email');
     const viewNickname = document.getElementById('view-nickname');
     const viewWhatsapp = document.getElementById('view-whatsapp');
     const viewGender = document.getElementById('view-gender');
-    const viewClientLevel = document.getElementById('view-client-level');
-    const viewAvailablePoints = document.getElementById('view-available-points'); // Added reference
+    viewEmail = document.getElementById('view-email');
+    viewNickname = document.getElementById('view-nickname');
+    viewWhatsapp = document.getElementById('view-whatsapp');
+    viewGender = document.getElementById('view-gender');
+    viewClientLevel = document.getElementById('view-client-level');
+    viewAvailablePoints = document.getElementById('view-available-points');
 
-    const editProfileForm = document.getElementById('edit-profile-form');
-    const editNicknameInput = document.getElementById('edit-nickname');
-    const editWhatsappInput = document.getElementById('edit-whatsapp');
-    const editGenderSelect = document.getElementById('edit-gender');
-    const editProfileErrorMessageDiv = document.getElementById('edit-profile-error-message');
+    editProfileForm = document.getElementById('edit-profile-form');
+    editNicknameInput = document.getElementById('edit-nickname');
+    editWhatsappInput = document.getElementById('edit-whatsapp');
+    editGenderSelect = document.getElementById('edit-gender');
+    editProfileErrorMessageDiv = document.getElementById('edit-profile-error-message');
 
-    const currentProfileImage = document.getElementById('current-profile-image');
-    const removeProfileImageButton = document.getElementById('remove-profile-image-button');
-    const profileImageUploadInput = document.getElementById('profile-image-upload');
-    const uploadProfileImageButton = document.getElementById('upload-profile-image-button');
-    const imageUploadErrorMessageDiv = document.getElementById('image-upload-error-message');
+    currentProfileImage = document.getElementById('current-profile-image');
+    removeProfileImageButton = document.getElementById('remove-profile-image-button');
+    profileImageUploadInput = document.getElementById('profile-image-upload');
+    uploadProfileImageButton = document.getElementById('upload-profile-image-button');
+    imageUploadErrorMessageDiv = document.getElementById('image-upload-error-message');
+
+    // Redemption Request elements
+    myRedemptionsTableBody = document.getElementById('my-redemptions-table-body');
+    noMyRedemptionsMessage = document.getElementById('no-my-redemptions-message');
 
 
-    async function loadProfileData() {
+    async function loadProfileData() { // This function is already defined within DOMContentLoaded
         const token = getToken(); // from auth.js
         if (!token) {
             // This should have been caught by inline page protection script
@@ -171,7 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial data load
     if (isLoggedIn()) { // Check if logged in before trying to load data
-        loadProfileData();
+        await loadProfileData(); // Await profile data
+        loadMyRedemptionRequests(); // Then load redemption requests
     } else {
         // This should be caught by the inline script, but as a fallback.
         // window.location.href = 'login.html';
@@ -190,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         removeProfileImageButton.addEventListener('click', handleRemoveProfileImage);
     }
 
-    const viewMyPurchaseHistoryButton = document.getElementById('view-my-purchase-history-button');
+    viewMyPurchaseHistoryButton = document.getElementById('view-my-purchase-history-button');
     if (viewMyPurchaseHistoryButton) {
         viewMyPurchaseHistoryButton.addEventListener('click', () => {
             if (currentLoggedInUserId) {
@@ -263,6 +297,72 @@ async function handleUploadProfileImage() {
             imageUploadErrorMessageDiv.style.display = 'block';
         } else {
             alert(error.message);
+        }
+    }
+}
+
+async function loadMyRedemptionRequests() {
+    if (!myRedemptionsTableBody) return;
+
+    const token = getToken();
+    if (!token) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/me/redeem/requests/?limit=20`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.status === 401) {
+            logout();
+            window.location.href = 'login.html';
+            return;
+        }
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Error al cargar tus solicitudes de canje.');
+        }
+
+        const requests = await response.json();
+
+        myRedemptionsTableBody.innerHTML = '';
+        if (noMyRedemptionsMessage) noMyRedemptionsMessage.style.display = 'none';
+
+        if (requests.length === 0) {
+            if (noMyRedemptionsMessage) {
+                noMyRedemptionsMessage.textContent = 'No has realizado ninguna solicitud de canje todavía.';
+                noMyRedemptionsMessage.style.display = 'block';
+            }
+        } else {
+            requests.forEach(req => {
+                const row = myRedemptionsTableBody.insertRow();
+
+                row.insertCell().textContent = req.id;
+                row.insertCell().textContent = req.gift_item?.product?.name || 'Regalo no disponible';
+                row.insertCell().textContent = req.points_at_request;
+                row.insertCell().textContent = new Date(req.requested_at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+
+                const statusCell = row.insertCell();
+                const statusSpan = document.createElement('span');
+                statusSpan.classList.add('status-badge');
+                const statusKey = req.status;
+                statusSpan.classList.add(`status-${statusKey.toLowerCase().replace(/_/g, '-')}`);
+                statusSpan.textContent = RedemptionRequestStatusDisplay[statusKey] || statusKey;
+                statusSpan.title = `Estado: ${RedemptionRequestStatusDisplay[statusKey] || statusKey}`;
+                statusCell.appendChild(statusSpan);
+
+                row.insertCell().textContent = req.admin_notes || '-';
+            });
+        }
+
+    } catch (error) {
+        console.error('Error loading my redemption requests:', error);
+        if (noMyRedemptionsMessage) {
+            noMyRedemptionsMessage.textContent = `Error: ${error.message}`;
+            noMyRedemptionsMessage.style.display = 'block';
+        } else if (myRedemptionsTableBody) {
+             myRedemptionsTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error: ${error.message}</td></tr>`;
         }
     }
 }

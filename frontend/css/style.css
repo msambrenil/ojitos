@@ -805,12 +805,25 @@ body.dark-mode {
     --disabled-button-bg-color: #E0E0E0; /* For disabled buttons in light mode */
     --primary-color-light: #FCE4EC; /* Example light variant of E83E8C */
     --primary-color-dark: #8C235F;  /* Example dark variant of E83E8C */
+
+    /* Redemption Status Colors */
+    --info-color: #1976D2; /* Blue for 'Aprobado' */
+    --info-color-light-bg: #E3F2FD;
+    --info-color-dark-text: #0D47A1;
+    --success-color: #388E3C; /* Green for 'Entregado' (used in badge styles) */
 }
 
 body.dark-mode {
     /* ... existing vars ... */
     --primary-color-light: #FCE4EC; /* Keep same light for dark mode, or adjust if needed */
     --primary-color-dark: #8C235F;  /* Keep same dark for dark mode, or adjust if needed */
+
+    /* Redemption Status Colors for Dark Mode */
+    --info-color-dark-mode: #64B5F6; /* Lighter blue for dark theme */
+    --info-color-light-bg-dark-mode: #0D47A1;
+    --info-color-dark-text-dark-mode: #E3F2FD;
+    --success-color-dark-mode: #66BB6A; /* Lighter Green for dark theme (used in badge styles) */
+    /* Other status colors like warning, danger, secondary are assumed to be covered by existing general theme vars */
 }
 
 
@@ -1321,6 +1334,66 @@ body.dark-mode .product-card.product-sold-out .add-to-cart-catalog-button {
 #user-points-display-section {
     background-color: var(--primary-color-light, #FCE4EC);
     border: 1px solid var(--primary-color, #E83E8C);
+}
+
+/* Status Badges for Tables */
+.status-badge {
+    padding: 4px 10px; /* Adjusted padding */
+    border-radius: 16px; /* Pill shape */
+    font-size: 0.80em; /* Slightly smaller */
+    font-weight: 600; /* Bolder */
+    text-transform: uppercase; /* Uppercase for badge-like feel */
+    letter-spacing: 0.5px;
+    color: #fff; /* Default text color for badges (often white) */
+    text-align: center;
+    display: inline-block; /* To allow padding and centering if cell is larger */
+    min-width: 120px; /* Minimum width for some consistency */
+}
+
+/* PENDIENTE_APROBACION */
+.status-badge.status-pendiente-aprobacion {
+    background-color: var(--warning-color-dark, #FF8F00); /* Orange. Uses existing warning color */
+    color: #fff;
+}
+/* APROBADO_POR_ENTREGAR */
+.status-badge.status-aprobado-por-entregar {
+    background-color: var(--info-color, #1976D2); /* Blue */
+    color: #fff;
+}
+/* ENTREGADO */
+.status-badge.status-entregado {
+    background-color: var(--success-color, #388E3C); /* Green */
+    color: #fff;
+}
+/* RECHAZADO */
+.status-badge.status-rechazado {
+    background-color: var(--danger-color, #D32F2F); /* Red. Uses existing danger color */
+    color: #fff;
+}
+/* CANCELADO_POR_CLIENTE */
+.status-badge.status-cancelado-por-cliente {
+    background-color: var(--text-color-secondary, #757575); /* Grey. Uses existing secondary text color */
+    color: #fff;
+}
+
+/* Dark Mode Adjustments for Status Badges */
+body.dark-mode .status-badge.status-pendiente-aprobacion {
+    background-color: var(--warning-color-dark-mode, #FFA000); /* Assumes this var exists or uses fallback */
+}
+body.dark-mode .status-badge.status-aprobado-por-entregar {
+    background-color: var(--info-color-dark-mode, #64B5F6);
+    color: #000; /* Text color for light blue background in dark mode */
+}
+body.dark-mode .status-badge.status-entregado {
+    background-color: var(--success-color-dark-mode, #66BB6A);
+    color: #000; /* Text color for light green background in dark mode */
+}
+body.dark-mode .status-badge.status-rechazado {
+    background-color: var(--danger-color-dark-mode, #EF5350); /* Assumes this var exists or uses fallback */
+}
+body.dark-mode .status-badge.status-cancelado-por-cliente {
+    background-color: var(--text-color-secondary-dark-mode, #9E9E9E);  /* Assumes this var exists or uses fallback */
+    color: #000; /* Text color for light grey background in dark mode */
 }
 body.dark-mode #user-points-display-section {
     background-color: var(--primary-color-dark, #8C235F);

@@ -23,6 +23,7 @@
             <a href="admin_tags.html" class="nav-link" id="nav-admin-tags-link" style="display:none;">Admin Tags</a>
             <a href="admin_categories.html" class="nav-link" id="nav-admin-categories-link" style="display:none;">Admin Categorías</a>
             <a href="admin_catalog.html" class="nav-link" id="nav-admin-catalog-link" style="display:none;">Admin Catálogo</a>
+            <a href="admin_redemptions.html" class="nav-link" id="nav-admin-redemptions-link" style="display: none;">Gestionar Canjes</a>
             <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
             <a href="my_cart.html" class="nav-link" id="nav-cart-link" style="display:none;"><i class="fas fa-shopping-cart"></i> Carrito (<span id="cart-item-count">0</span>)</a>
             <a href="redeem_gifts.html" class="nav-link" id="nav-redeem-gifts-link" style="display:none;">Canjear Puntos</a>
@@ -102,6 +103,31 @@
             </div>
             <p style="margin-top:10px; font-size:0.9em; color:var(--text-color-secondary);">
                 Aquí podrás ver todas las compras que has realizado.
+            </p>
+        </section>
+
+        <section id="my-redemption-requests-section" class="profile-section card-like">
+            <h2>Mis Solicitudes de Canje de Puntos</h2>
+            <div id="my-redemptions-table-placeholder">
+                <table id="my-redemptions-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID Solicitud</th>
+                            <th>Regalo (Producto)</th>
+                            <th>Puntos Canjeados</th>
+                            <th>Fecha Solicitud</th>
+                            <th>Estado</th>
+                            <th>Notas del Administrador</th>
+                            <!-- Optional: <th>Acciones</th> -->
+                        </tr>
+                    </thead>
+                    <tbody id="my-redemptions-table-body">
+                        <!-- Redemption request rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="no-my-redemptions-message" class="empty-list-message" style="display:none; text-align:center; padding: 20px;">
+                No has realizado ninguna solicitud de canje todavía.
             </p>
         </section>
 

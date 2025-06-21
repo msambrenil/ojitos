@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Solicitudes de Canje - Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <a href="index.html">Showroom Natura OjitOs</a>
+        </div>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+            <a href="catalog.html" class="nav-link" id="nav-catalog-link">Catálogo</a>
+            <a href="products.html" class="nav-link" id="nav-products-link" style="display:none;">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link" style="display:none;">Admin Clientes</a>
+            <a href="admin_config.html" class="nav-link" id="nav-admin-config-link" style="display:none;">Admin Config</a>
+            <a href="admin_tags.html" class="nav-link" id="nav-admin-tags-link" style="display:none;">Admin Tags</a>
+            <a href="admin_categories.html" class="nav-link" id="nav-admin-categories-link" style="display:none;">Admin Categorías</a>
+            <a href="admin_catalog.html" class="nav-link" id="nav-admin-catalog-link" style="display:none;">Admin Catálogo</a>
+            <a href="admin_redemptions.html" class="nav-link" id="nav-admin-redemptions-link" style="display:none;">Admin Canjes</a> <!-- New Link -->
+
+            <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
+            <a href="my_cart.html" class="nav-link" id="nav-cart-link" style="display:none;"><i class="fas fa-shopping-cart"></i> Carrito (<span id="cart-item-count">0</span>)</a>
+            <a href="redeem_gifts.html" class="nav-link" id="nav-redeem-gifts-link" style="display:none;">Canjear Puntos</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <span id="user-greeting" style="display:none;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">🌙</button>
+    </header>
+
+    <main class="page-container redemptions-admin-container">
+        <h1>Gestión de Solicitudes de Canje</h1>
+
+        <section class="filters-section redemption-filters card-like" style="margin-bottom: 20px;">
+            <h2>Filtrar Solicitudes</h2>
+            <div id="redemption-filters-controls" style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;">
+                <div class="form-field-group" style="flex-grow: 1;">
+                    <label for="filter-redemption-userid">ID de Usuario:</label>
+                    <input type="number" id="filter-redemption-userid" placeholder="Ej: 123">
+                </div>
+                <div class="form-field-group" style="flex-grow: 1;">
+                    <label for="filter-redemption-status">Estado:</label>
+                    <select id="filter-redemption-status">
+                        <option value="">Todos los Estados</option>
+                        <!-- Options will be populated by JS using RedemptionRequestStatusEnum -->
+                    </select>
+                </div>
+                <div class="form-field-group" style="flex-grow: 1;">
+                    <label for="filter-redemption-date-from">Desde Fecha:</label>
+                    <input type="date" id="filter-redemption-date-from">
+                </div>
+                <div class="form-field-group" style="flex-grow: 1;">
+                    <label for="filter-redemption-date-to">Hasta Fecha:</label>
+                    <input type="date" id="filter-redemption-date-to">
+                </div>
+                <div class="form-actions filter-actions">
+                    <button type="button" id="apply-redemption-filters-button" class="mdc-button">Aplicar</button>
+                    <button type="button" id="clear-redemption-filters-button" class="mdc-button mdc-button--outlined">Limpiar</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="list-redemptions-section" class="card-like">
+            <h2>Solicitudes de Canje</h2>
+            <div id="redemptions-table-placeholder">
+                <table id="redemptions-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID Sol.</th>
+                            <th>Cliente (ID/Nombre)</th>
+                            <th>Regalo (Producto)</th>
+                            <th>Puntos Costo</th>
+                            <th>Fecha Solicitud</th>
+                            <th>Estado</th>
+                            <th>Notas Admin</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="redemptions-table-body">
+                        <!-- Redemption request rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="no-redemptions-message" class="empty-list-message" style="display:none; text-align:center; padding: 20px;">
+                No hay solicitudes de canje o ninguna coincide con los filtros aplicados.
+            </p>
+        </section>
+
+        <!-- Optional Modal for adding/editing admin_notes when performing actions -->
+        <div id="redemption-action-notes-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-modal-button" id="redemption-notes-modal-close-button">&times;</span>
+                <h3 id="redemption-notes-modal-title">Añadir Notas Administrativas</h3>
+                <form id="redemption-notes-form" class="styled-form">
+                    <input type="hidden" id="action-request-id">
+                    <input type="hidden" id="action-type"> <!-- 'approve', 'reject', 'deliver' -->
+                    <div class="form-field-group">
+                        <label for="form-admin-notes">Notas (Opcional):</label>
+                        <textarea id="form-admin-notes" name="admin_notes" rows="3" maxlength="512"></textarea>
+                    </div>
+                    <div id="redemption-notes-error-message" class="error-message" style="display:none;"></div>
+                    <div class="form-actions">
+                        <button type="submit" id="confirm-action-button" class="mdc-button mdc-button--raised">Confirmar Acción</button>
+                        <button type="button" class="mdc-button cancel-modal-button" id="redemption-notes-modal-cancel-button">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Showroom Natura OjitOs</p>
+    </footer>
+
+    <script src="js/cart_guest.js" defer></script>
+    <script src="js/auth.js" defer></script>
+    <script src="js/admin_redemptions.js" defer></script>
+    <script>
+        // Page Protection
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!isLoggedIn()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            const userInfo = getCurrentUserInfo(); // From auth.js
+            if (!userInfo || !userInfo.isSuperuser) {
+                alert("Acceso denegado. Se requieren permisos de administrador.");
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>
