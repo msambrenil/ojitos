@@ -188,6 +188,7 @@ function updateAuthUI() {
     const navProductsLink = document.getElementById('nav-products-link'); // For "Gestión de Productos"
     const wishlistLink = document.getElementById('nav-wishlist-link');
     const navCartLink = document.getElementById('nav-cart-link');
+    const redeemGiftsLink = document.getElementById('nav-redeem-gifts-link'); // Added reference
 
     const currentUserInfo = getCurrentUserInfo(); // Get stored user info
 
@@ -196,6 +197,7 @@ function updateAuthUI() {
         if (profileLink) profileLink.style.display = 'inline';
         if (wishlistLink) wishlistLink.style.display = 'inline';
         if (navCartLink) navCartLink.style.display = 'inline';
+        if (redeemGiftsLink) redeemGiftsLink.style.display = 'inline'; // Show for logged-in users
         if (logoutButton) logoutButton.style.display = 'inline-block';
 
         if (currentUserInfo && userGreeting) {
@@ -228,6 +230,7 @@ function updateAuthUI() {
         if (profileLink) profileLink.style.display = 'none';
         if (wishlistLink) wishlistLink.style.display = 'none';
         if (navCartLink) navCartLink.style.display = 'none';
+        if (redeemGiftsLink) redeemGiftsLink.style.display = 'none'; // Hide for non-logged-in users
         if (logoutButton) logoutButton.style.display = 'none';
         if (userGreeting) {
             userGreeting.style.display = 'none';

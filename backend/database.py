@@ -334,6 +334,15 @@ class SaleStatusEnum(str, enum.Enum):
     # DEVUELTO = "devuelto"
 
 
+# --- Redemption Request Status Enum ---
+class RedemptionRequestStatusEnum(str, enum.Enum):
+    PENDIENTE_APROBACION = "pendiente_aprobacion"  # Initial state when client requests
+    APROBADO_POR_ENTREGAR = "aprobado_por_entregar" # Admin/Seller approved, pending physical preparation/delivery
+    ENTREGADO = "entregado"                     # Client has received the gift
+    RECHAZADO = "rechazado"                       # Admin/Seller rejected the request (e.g., out of stock unexpectedly, points issue)
+    CANCELADO_POR_CLIENTE = "cancelado_por_cliente" # If clients are allowed to cancel their pending requests
+
+
 # --- User's Own Profile Update Schema ---
 class MyProfileUpdate(SQLModel):
     nickname: Optional[str] = Field(default=None)
@@ -575,3 +584,62 @@ class GiftItemRead(GiftItemBase):
     created_at: datetime
     updated_at: datetime
     product: "ProductRead"
+
+
+# --- Redemption Request Model ---
+class RedemptionRequest(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    user_id: int = Field(foreign_key="user.id", index=True, nullable=False)
+    gift_item_id: int = Field(foreign_key="giftitem.id", index=True, nullable=False)
+
+    points_at_request: int = Field(gt=0, nullable=False)
+
+    product_details_at_request: Optional[str] = Field(default=None, max_length=1024)
+
+    status: RedemptionRequestStatusEnum = Field(
+        default=RedemptionRequestStatusEnum.PENDIENTE_APROBACION,
+        index=True,
+        nullable=False
+    )
+
+    requested_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column_kwargs={"onupdate": datetime.utcnow},
+        nullable=False
+    )
+
+    admin_notes: Optional[str] = Field(default=None, max_length=512)
+
+    user: "User" = Relationship()
+    gift_item: "GiftItem" = Relationship()
+
+
+# --- Pydantic Schemas for RedemptionRequest ---
+class RedemptionRequestBase(SQLModel):
+    gift_item_id: int = Field(gt=0)
+
+class RedemptionRequestCreate(RedemptionRequestBase):
+    pass
+
+class RedemptionRequestUpdateAdmin(SQLModel):
+    status: Optional[RedemptionRequestStatusEnum] = None
+    admin_notes: Optional[str] = Field(default=None, max_length=512)
+
+class RedemptionActionPayload(SQLModel):
+    admin_notes: Optional[str] = Field(default=None, max_length=512)
+
+class RedemptionRequestRead(SQLModel):
+    id: int
+    user_id: int
+    gift_item_id: int
+    points_at_request: int
+    product_details_at_request: Optional[str]
+    status: RedemptionRequestStatusEnum
+    requested_at: datetime
+    updated_at: datetime
+    admin_notes: Optional[str]
+
+    gift_item: "GiftItemRead"
+    user: Optional["UserRead"] = None
