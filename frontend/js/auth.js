@@ -186,9 +186,10 @@ function updateAuthUI() {
     const adminCategoriesLink = document.getElementById('nav-admin-categories-link');
     const adminCatalogLink = document.getElementById('nav-admin-catalog-link');
     const navProductsLink = document.getElementById('nav-products-link'); // For "Gestión de Productos"
+    const adminRedemptionsLink = document.getElementById('nav-admin-redemptions-link'); // New Admin link
     const wishlistLink = document.getElementById('nav-wishlist-link');
     const navCartLink = document.getElementById('nav-cart-link');
-    const redeemGiftsLink = document.getElementById('nav-redeem-gifts-link'); // Added reference
+    const redeemGiftsLink = document.getElementById('nav-redeem-gifts-link');
 
     const currentUserInfo = getCurrentUserInfo(); // Get stored user info
 
@@ -214,7 +215,8 @@ function updateAuthUI() {
             if (adminTagsLink) adminTagsLink.style.display = 'inline';
             if (adminCategoriesLink) adminCategoriesLink.style.display = 'inline';
             if (adminCatalogLink) adminCatalogLink.style.display = 'inline';
-            if (navProductsLink) navProductsLink.style.display = 'inline'; // Show "Gestión de Productos" for admin
+            if (navProductsLink) navProductsLink.style.display = 'inline';
+            if (adminRedemptionsLink) adminRedemptionsLink.style.display = 'inline'; // Show for admin
         } else {
             // Not a superuser, or user info not available
             if (adminClientsLink) adminClientsLink.style.display = 'none';
@@ -222,7 +224,8 @@ function updateAuthUI() {
             if (adminTagsLink) adminTagsLink.style.display = 'none';
             if (adminCategoriesLink) adminCategoriesLink.style.display = 'none';
             if (adminCatalogLink) adminCatalogLink.style.display = 'none';
-            if (navProductsLink) navProductsLink.style.display = 'none'; // Hide "Gestión de Productos"
+            if (navProductsLink) navProductsLink.style.display = 'none';
+            if (adminRedemptionsLink) adminRedemptionsLink.style.display = 'none'; // Hide for non-admin
         }
 
     } else { // Not logged in
@@ -242,7 +245,8 @@ function updateAuthUI() {
         if (adminTagsLink) adminTagsLink.style.display = 'none';
         if (adminCategoriesLink) adminCategoriesLink.style.display = 'none';
         if (adminCatalogLink) adminCatalogLink.style.display = 'none';
-        if (navProductsLink) navProductsLink.style.display = 'none'; // Hide "Gestión de Productos"
+        if (navProductsLink) navProductsLink.style.display = 'none';
+        if (adminRedemptionsLink) adminRedemptionsLink.style.display = 'none'; // Hide if not logged in
     }
     updateCartIndicator();
 }
