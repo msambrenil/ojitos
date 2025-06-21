@@ -65,6 +65,7 @@ class ClientProfileBase(SQLModel):
 class ClientProfile(ClientProfileBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", unique=True, index=True) # Ensures one-to-one
+    available_points: int = Field(default=0, ge=0, nullable=False)
 
     user: User = Relationship(back_populates="client_profile")
 
@@ -83,6 +84,7 @@ class ClientProfileUpdate(SQLModel): # All fields optional for PATCH-like behavi
 class ClientProfileRead(ClientProfileBase): # Now inherits from ClientProfileBase
     id: int
     user_id: int
+    available_points: int # Will be populated from the ORM model's field
     # nickname, whatsapp_number, etc. are inherited from ClientProfileBase
 
 
@@ -531,3 +533,45 @@ class SiteConfigurationUpdate(SQLModel):
     system_param_points_per_currency_unit: Optional[float] = Field(default=None, ge=0)
     system_param_default_showroom_discount_percentage: Optional[int] = Field(default=None, ge=0, le=100)
     # id and updated_at are not directly updatable by client.
+
+
+# --- Gift Item Model (for point redemption) ---
+class GiftItem(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    product_id: int = Field(foreign_key="product.id", unique=True, index=True, nullable=False)
+
+    points_required: int = Field(gt=0, nullable=False)
+    stock_available_for_redeem: int = Field(default=0, ge=0, nullable=False)
+    is_active_as_gift: bool = Field(default=True, index=True, nullable=False)
+
+    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column_kwargs={"onupdate": datetime.utcnow},
+        nullable=False
+    )
+
+    product: "Product" = Relationship()
+
+
+# --- Pydantic Schemas for GiftItem ---
+class GiftItemBase(SQLModel):
+    product_id: int = Field(gt=0)
+    points_required: int = Field(gt=0)
+    stock_available_for_redeem: int = Field(default=0, ge=0)
+    is_active_as_gift: bool = Field(default=True)
+
+class GiftItemCreate(GiftItemBase):
+    pass
+
+class GiftItemUpdate(SQLModel):
+    points_required: Optional[int] = Field(default=None, gt=0)
+    stock_available_for_redeem: Optional[int] = Field(default=None, ge=0)
+    is_active_as_gift: Optional[bool] = None
+
+class GiftItemRead(GiftItemBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    product: "ProductRead"

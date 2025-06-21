@@ -97,7 +97,8 @@ from .database import (
     SiteConfiguration,  # Added SiteConfiguration import
     Tag, TagRead,        # Added Tag and TagRead for product tag management
     Category, CategoryCreate, CategoryRead, # Added Category models
-    CatalogEntry, CatalogEntryCreate, CatalogEntryUpdate, CatalogEntryApiResponse # Added CatalogEntry models
+    CatalogEntry, CatalogEntryCreate, CatalogEntryUpdate, CatalogEntryApiResponse, # Added CatalogEntry models
+    GiftItem, GiftItemCreate, GiftItemUpdate, GiftItemRead # Added GiftItem models
 )
 
 
@@ -1510,6 +1511,128 @@ def read_public_catalog_entries(
 app.include_router(catalog_public_router)
 
 
+# --- Admin Gift Items Router ---
+gift_items_admin_router = APIRouter(
+    prefix="/api/admin/gift-items",
+    tags=["Admin - Gift Items Management"],
+    dependencies=[Depends(get_current_active_user)]
+)
+
+@gift_items_admin_router.post("/", response_model=GiftItemRead, status_code=status.HTTP_201_CREATED)
+def create_gift_item_admin(
+    gift_in: GiftItemCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    product = session.get(Product, gift_in.product_id)
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product with ID {gift_in.product_id} not found."
+        )
+
+    db_gift_item = GiftItem.model_validate(gift_in)
+    try:
+        session.add(db_gift_item)
+        session.commit()
+        session.refresh(db_gift_item)
+        if not db_gift_item.product:
+             session.refresh(db_gift_item, ["product"])
+        return db_gift_item
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Product ID {gift_in.product_id} is already configured as a gift item."
+        )
+
+@gift_items_admin_router.get("/", response_model=List[GiftItemRead])
+def read_gift_items_admin(
+    skip: int = 0,
+    limit: int = 100,
+    is_active: Optional[bool] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    query = select(GiftItem).options(selectinload(GiftItem.product))
+
+    if is_active is not None:
+        query = query.where(GiftItem.is_active_as_gift == is_active)
+
+    query = query.order_by(GiftItem.id).offset(skip).limit(limit)
+    gift_items = session.exec(query).all()
+    return gift_items
+
+@gift_items_admin_router.get("/{gift_item_id}", response_model=GiftItemRead)
+def read_gift_item_admin(
+    gift_item_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    db_gift_item = session.exec(
+        select(GiftItem).where(GiftItem.id == gift_item_id).options(selectinload(GiftItem.product))
+    ).first()
+
+    if not db_gift_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift item not found")
+    return db_gift_item
+
+@gift_items_admin_router.put("/{gift_item_id}", response_model=GiftItemRead)
+def update_gift_item_admin(
+    gift_item_id: int,
+    gift_update: GiftItemUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    db_gift_item = session.get(GiftItem, gift_item_id)
+    if not db_gift_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift item not found")
+
+    update_data = gift_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_gift_item, key, value)
+
+    db_gift_item.updated_at = datetime.now(timezone.utc)
+
+    session.add(db_gift_item)
+    session.commit()
+    session.refresh(db_gift_item)
+    if not db_gift_item.product:
+        session.refresh(db_gift_item, ["product"])
+    return db_gift_item
+
+@gift_items_admin_router.delete("/{gift_item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_gift_item_admin(
+    gift_item_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    db_gift_item = session.get(GiftItem, gift_item_id)
+    if not db_gift_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gift item not found")
+
+    session.delete(db_gift_item)
+    session.commit()
+    return
+
+app.include_router(gift_items_admin_router)
+
+
 # --- User Specific Data Router (e.g., Sales History) ---
 # This router is already defined and included below.
 
@@ -1673,7 +1796,7 @@ def read_single_sale(
 
     return db_sale
 
-from .database import SaleUpdate, SaleStatusEnum, SaleItem # Ensure these are imported
+    from .database import SaleUpdate, SaleStatusEnum, SaleItem, Product, ClientProfile # Ensure these are imported
 
 @sales_router.put("/{sale_id}", response_model=SaleRead)
 def update_sale_details(
@@ -1724,6 +1847,38 @@ def update_sale_details(
                     print(f"Warning: Product ID {item.product_id} for SaleItem ID {item.id} not found. Stock not reverted.")
         db_sale.status = new_status # Assign the enum value
 
+    # --- Points Accumulation Logic ---
+    if db_sale.status == SaleStatusEnum.COBRADO and previous_status != SaleStatusEnum.COBRADO:
+        if db_sale.user_id and db_sale.points_earned is not None and db_sale.points_earned > 0:
+            # Ensure user and client_profile are loaded for points update
+            if not db_sale.user: # If relationship not loaded
+                 session.refresh(db_sale, ["user"])
+
+            if db_sale.user:
+                if not db_sale.user.client_profile:
+                    # This attempts to load client_profile if it wasn't loaded with the user.
+                    # If using selectinload for User in initial Sale query, this might not be needed.
+                    # For safety, or if User was loaded without its profile relation.
+                    user_with_profile = session.exec(
+                        select(User).where(User.id == db_sale.user_id).options(selectinload(User.client_profile))
+                    ).first()
+                    if user_with_profile and user_with_profile.client_profile:
+                        client_profile_to_update = user_with_profile.client_profile
+                    else: # Fallback if explicit load didn't work or no profile
+                        client_profile_to_update = None
+                else:
+                    client_profile_to_update = db_sale.user.client_profile
+
+                if client_profile_to_update:
+                    client_profile_to_update.available_points += db_sale.points_earned
+                    session.add(client_profile_to_update)
+                    print(f"POINTS: User {db_sale.user_id} earned {db_sale.points_earned} points. New total: {client_profile_to_update.available_points}")
+                else:
+                    print(f"WARNING: ClientProfile not found for user {db_sale.user_id} (Sale ID: {db_sale.id}). Points not added.")
+            else:
+                print(f"WARNING: User not found for sale {db_sale.id}. Points not added.")
+    # --- End Points Accumulation Logic ---
+
     db_sale.updated_at = datetime.now(timezone.utc)
     session.add(db_sale)
 
@@ -1737,6 +1892,8 @@ def update_sale_details(
                 session.refresh(item_in_sale.product)
         if db_sale.user:
             session.refresh(db_sale.user)
+            if db_sale.user.client_profile: # Also refresh client_profile as its points might have changed
+                session.refresh(db_sale.user.client_profile)
 
     except Exception as e:
         session.rollback()
