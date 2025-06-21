@@ -792,7 +792,19 @@ body.dark-mode {
     --error-border-color: #E57373;
     --primary-color: #64b5f6; /* Lighter blue for dark mode */
     --text-color-secondary: #aaaaaa;
+    /* Define warning colors if not already present */
+    --warning-color-light: #FFF3E0;
+    --warning-color-dark: #E65100;
+    --disabled-button-bg-color-dark: #424242; /* For disabled buttons in dark mode */
+
 }
+:root { /* Ensure warning colors are also in light mode root */
+    /* ... existing vars ... */
+    --warning-color-light: #FFF3E0;
+    --warning-color-dark: #E65100;
+    --disabled-button-bg-color: #E0E0E0; /* For disabled buttons in light mode */
+}
+
 
 /* --- My Profile Page Styles --- */
 .profile-container {
@@ -1232,4 +1244,67 @@ body.dark-mode {
     font-weight: bold;
     font-size: 1.1em; /* Slightly larger legend */
     color: var(--text-color);
+}
+
+/* Catalog Page Specific Styles & Stock Alerts */
+.stock-alerts-container { /* Container for alert messages on product card */
+    padding: 0px 10px 5px 10px;
+    text-align: center;
+    min-height: 20px; /* Reserve space even if no alert */
+}
+.stock-alert {
+    font-size: 0.9em;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+.sold-out-label {
+    background-color: var(--text-color-secondary, #757575); /* Darker grey */
+    color: var(--background-color, #fff);
+    border: 1px solid var(--text-color-secondary);
+}
+body.dark-mode .sold-out-label {
+    background-color: var(--text-color-secondary, #BDBDBD);
+    color: var(--background-color, #121212);
+}
+.low-stock-label {
+    background-color: var(--warning-color-light, #FFF3E0); /* Light orange/yellow */
+    color: var(--warning-color-dark, #E65100); /* Dark orange/yellow text */
+    border: 1px solid var(--warning-color-dark, #E65100);
+}
+/* body.dark-mode section for warning colors handled by variable definitions */
+
+.product-card.product-sold-out {
+    opacity: 0.6;
+}
+.product-card.product-sold-out .add-to-cart-catalog-button {
+    background-color: var(--disabled-button-bg-color, #E0E0E0) !important;
+    cursor: not-allowed;
+}
+body.dark-mode .product-card.product-sold-out .add-to-cart-catalog-button {
+    background-color: var(--disabled-button-bg-color-dark, #424242) !important;
+}
+.product-card .promo-text { /* Shared with product card if it has promo */
+    font-size: 0.85em;
+    color: var(--primary-color);
+    margin-top: 5px;
+    font-style: italic;
+}
+.catalog-actions {
+    /* .product-actions is display: flex; flex-direction: column; by default from wishlist */
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center; /* Vertically align items if their height differs */
+}
+.catalog-actions .wishlist-toggle-button {
+    font-size: 1.2em; /* Adjust if needed for row layout */
+    padding: 5px; /* Ensure clickable area */
+}
+.catalog-actions .add-to-cart-catalog-button {
+    /* mdc-button styles provide base, adjust if needed for row layout */
+    padding: 8px 12px; /* Slightly smaller padding if needed */
+    font-size: 0.85em; /* Slightly smaller font */
+    flex-grow: 1; /* Allow add to cart to take more space if wishlist is small */
+    margin-left: 10px; /* Space between wishlist and cart button */
 }
