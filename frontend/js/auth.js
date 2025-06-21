@@ -181,7 +181,9 @@ function updateAuthUI() {
     const logoutButton = document.getElementById('nav-logout-button');
     const userGreeting = document.getElementById('user-greeting');
     const adminClientsLink = document.getElementById('nav-admin-clients-link');
-    const adminConfigLink = document.getElementById('nav-admin-config-link'); // Get new link
+    const adminConfigLink = document.getElementById('nav-admin-config-link');
+    const adminTagsLink = document.getElementById('nav-admin-tags-link');
+    const adminCategoriesLink = document.getElementById('nav-admin-categories-link'); // Added adminCategoriesLink
     const wishlistLink = document.getElementById('nav-wishlist-link');
     const navCartLink = document.getElementById('nav-cart-link');
 
@@ -205,12 +207,16 @@ function updateAuthUI() {
         if (currentUserInfo && currentUserInfo.isSuperuser) {
             if (adminClientsLink) adminClientsLink.style.display = 'inline';
             if (adminConfigLink) adminConfigLink.style.display = 'inline';
+            if (adminTagsLink) adminTagsLink.style.display = 'inline';
+            if (adminCategoriesLink) adminCategoriesLink.style.display = 'inline'; // Show categories link for admin
         } else {
             if (adminClientsLink) adminClientsLink.style.display = 'none';
             if (adminConfigLink) adminConfigLink.style.display = 'none';
+            if (adminTagsLink) adminTagsLink.style.display = 'none';
+            if (adminCategoriesLink) adminCategoriesLink.style.display = 'none'; // Hide categories link for non-admin
         }
 
-    } else {
+    } else { // Not logged in
         if (loginLink) loginLink.style.display = 'inline';
         if (profileLink) profileLink.style.display = 'none';
         if (wishlistLink) wishlistLink.style.display = 'none';
@@ -220,8 +226,11 @@ function updateAuthUI() {
             userGreeting.style.display = 'none';
             userGreeting.textContent = '';
         }
+        // Hide all admin links if not logged in
         if (adminClientsLink) adminClientsLink.style.display = 'none';
         if (adminConfigLink) adminConfigLink.style.display = 'none';
+        if (adminTagsLink) adminTagsLink.style.display = 'none';
+        if (adminCategoriesLink) adminCategoriesLink.style.display = 'none';
     }
     updateCartIndicator();
 }

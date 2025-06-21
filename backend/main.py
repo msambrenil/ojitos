@@ -93,7 +93,9 @@ from .database import (
     ProductCreate,
     ProductRead,
     ProductUpdate,
-    SiteConfiguration  # Added SiteConfiguration import
+    SiteConfiguration,  # Added SiteConfiguration import
+    Tag, TagRead,        # Added Tag and TagRead for product tag management
+    Category, CategoryCreate, CategoryRead # Added Category models
 )
 
 
@@ -228,16 +230,75 @@ async def create_product_endpoint(
         image_url_for_db = f"/{file_path}" # Store path relative to static mount
 
     # ProductCreate model already calculated derived prices if needed
-    db_product_data = product_in.model_dump()
-    db_product_data["image_url"] = image_url_for_db
+    # ProductCreate includes category_id, which model_dump will pick up.
+    product_data_for_db_instance = product_in.model_dump(exclude={"tag_names"}) # Exclude tag_names as it's handled by relationship
 
-    # Validate data with Product model (table model) before saving to DB
-    db_product = Product.model_validate(db_product_data)
+    # Validate category_id if provided
+    validated_category_id: Optional[int] = None
+    if product_in.category_id is not None:
+        category = session.get(Category, product_in.category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Category with ID {product_in.category_id} not found."
+            )
+        validated_category_id = product_in.category_id
 
-    session.add(db_product)
-    session.commit()
-    session.refresh(db_product)
-    return db_product
+    # Prepare data for Product model instance, ensuring category_id is correctly set
+    # and image_url is added.
+    # Fields from ProductCreate (inheriting ProductBase) are: name, description, image_url (added here),
+    # price_revista, price_showroom, price_feria, stock_actual, stock_critico, category_id.
+
+    # Create the Product DB model instance
+    # Explicitly pass validated_category_id. Other fields come from product_in via ProductBase.
+    db_product_args = product_in.model_dump(exclude={"tag_names", "category_id"})
+    db_product = Product(**db_product_args, image_url=image_url_for_db, category_id=validated_category_id)
+
+    # Handle tags
+    if product_in.tag_names:
+        processed_tags = []
+        for tag_name in product_in.tag_names:
+            tag_name_stripped = tag_name.strip()
+            if not tag_name_stripped:
+                continue
+
+            tag_name_lower = tag_name_stripped.lower()
+            db_tag = session.exec(select(Tag).where(func.lower(Tag.name) == tag_name_lower)).first()
+
+            if not db_tag:
+                # Tag does not exist, create it
+                # Perform a final check within the transaction if strict unique handling is needed for concurrent requests
+                # For simplicity here, we rely on the initial check and potential IntegrityError on commit.
+                db_tag = Tag(name=tag_name_stripped) # Using original stripped name for storage
+                session.add(db_tag)
+                # Note: If Tag name has a unique constraint, commit might fail if another request created it.
+                # The main endpoint's try-except should handle this.
+            processed_tags.append(db_tag)
+        db_product.tags = processed_tags
+
+    try:
+        session.add(db_product)
+        session.commit()
+        session.refresh(db_product)
+        # Ensure relationships are loaded for ProductRead serialization
+        if db_product.category_obj is not None:
+            session.refresh(db_product.category_obj) # Explicitly refresh to load CategoryRead data
+        # Accessing .tags triggers the load of the list if not already loaded.
+        # Refreshing each tag ensures its data is current for TagRead serialization.
+        for tag_item in db_product.tags:
+            session.refresh(tag_item)
+        return db_product
+    except IntegrityError as e:
+        session.rollback()
+        # Check if it's a tag name conflict (if we hadn't checked before or due to race condition)
+        if "tag.name" in str(e).lower() and "UNIQUE constraint failed" in str(e):
+             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A tag name caused a conflict. Ensure tag names are unique. Error: {e}")
+        # Could also be product name unique constraint if one was added to Product model
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Data integrity error, possibly duplicate entry. Error: {e}")
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred: {str(e)}")
+
 
 @products_router.get("/", response_model=List[ProductRead])
 def read_products_filtered( # Renamed
@@ -329,13 +390,63 @@ async def update_product_endpoint(
 
 
     # Apply updates to the database product object
+    # Handle category_id separately for validation
+    if "category_id" in update_data:
+        new_category_id = update_data.pop("category_id") # Remove so it's not processed in the loop
+        if new_category_id is not None:
+            category = session.get(Category, new_category_id)
+            if not category:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Category with ID {new_category_id} not found."
+                )
+            db_product.category_id = new_category_id
+        else: # new_category_id is None, so unset the category
+            db_product.category_id = None
+
     for key, value in update_data.items():
+        if key == "tag_names": continue # Skip tag_names, handled separately by its own logic below
         setattr(db_product, key, value)
 
-    session.add(db_product)
-    session.commit()
-    session.refresh(db_product)
-    return db_product
+    # Handle tags update (existing logic for tags)
+    if product_update_data.tag_names is not None: # Field was provided
+        if not product_update_data.tag_names: # Empty list means remove all tags
+            db_product.tags.clear()
+        else:
+            updated_tags_list = []
+            for tag_name in product_update_data.tag_names:
+                tag_name_stripped = tag_name.strip()
+                if not tag_name_stripped:
+                    continue
+
+                tag_name_lower = tag_name_stripped.lower()
+                db_tag = session.exec(select(Tag).where(func.lower(Tag.name) == tag_name_lower)).first()
+
+                if not db_tag:
+                    db_tag = Tag(name=tag_name_stripped)
+                    session.add(db_tag)
+                updated_tags_list.append(db_tag)
+            db_product.tags = updated_tags_list
+
+    try:
+        session.add(db_product)
+        session.commit()
+        session.refresh(db_product)
+        # Ensure relationships are loaded for ProductRead serialization
+        if db_product.category_obj is not None:
+             session.refresh(db_product.category_obj)
+        for tag_item in db_product.tags:
+             session.refresh(tag_item)
+        return db_product
+    except IntegrityError as e:
+        session.rollback()
+        if "tag.name" in str(e).lower() and "UNIQUE constraint failed" in str(e):
+             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A tag name caused a conflict during update. Error: {e}")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Data integrity error during update. Error: {e}")
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred during update: {str(e)}")
+
 
 @products_router.delete("/{product_id}", response_model=dict)
 def delete_product_endpoint(product_id: int, session: Session = Depends(get_session)):
@@ -407,50 +518,72 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 @app.post("/users/", response_model=UserReadWithClientProfile)
-def create_user_and_profile(user_in: UserCreate, session: Session = Depends(get_session)):
+def create_user_and_profile( # Name kept as per existing function
+    user_in: UserCreate,
+    session: Session = Depends(get_session),
+    current_creator: User = Depends(get_current_active_user) # Added for authorization
+):
+    # Authorization: Only superusers can create new users
+    if not current_creator.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to create users"
+        )
+
     # Check if user (email) already exists
     existing_user = session.exec(select(User).where(User.email == user_in.email)).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
-    hashed_password = get_password_hash(user_in.password)
+    hashed_password = get_password_hash(user_in.password) # get_password_hash should exist
 
-    # Create user dictionary for User model, excluding plain password
-    user_data_for_model = user_in.model_dump(exclude={"password"})
+    # UserCreate inherits is_active, is_superuser, is_seller from UserBase.
+    # Pydantic will use defaults from UserBase if not provided in user_in.
+    user_data_for_db = user_in.model_dump(exclude={"password"})
+    # user_data_for_db will contain email, full_name, and values for
+    # is_active, is_superuser, is_seller (either from payload or UserBase defaults).
 
-    db_user = User(**user_data_for_model, hashed_password=hashed_password)
+    db_user = User(**user_data_for_db, hashed_password=hashed_password)
 
     # Create an empty ClientProfile and associate it
+    # SQLModel should handle linking db_client_profile to db_user if relationship is set up correctly
+    # and db_user is added to session. Let's ensure it's explicit if ClientProfile needs user_id.
+    # ClientProfile model has user_id, so it's better to associate after user has ID or link via relationship.
+    # Current ClientProfile does not require user_id in its constructor.
+    # The relationship `db_user.client_profile = db_client_profile` handles the association.
     db_client_profile = ClientProfile()
-    db_user.client_profile = db_client_profile
+    db_user.client_profile = db_client_profile # Associate directly
 
-    session.add(db_user)
+    session.add(db_user) # Adding user should also schedule client_profile for insert due to relationship
 
     try:
         session.commit()
         session.refresh(db_user)
-        # SQLModel automatically handles setting user_id on db_client_profile
-        # and client_profile.id is generated upon commit if db_user was committed with it.
-        # However, explicit refresh of the related object is good practice if you need its DB state immediately.
-        if db_user.client_profile:
-             session.refresh(db_user.client_profile)
+        if db_user.client_profile: # Should exist and be linked
+            session.refresh(db_user.client_profile)
         else:
-            # This case implies the relationship or cascade did not work as expected.
+            # This would be unexpected if the relationship setup is correct.
+            print(f"WARNING: ClientProfile not immediately available after creating user ID {db_user.id}")
             # Attempt to fetch it to be sure, though this indicates a deeper issue if necessary.
+            # This part can be removed if confident in SQLModel's relationship handling.
             profile_check = session.exec(select(ClientProfile).where(ClientProfile.user_id == db_user.id)).first()
             if profile_check:
-                db_user.client_profile = profile_check
+                db_user.client_profile = profile_check # Manually re-associate for the response
+                session.refresh(db_user.client_profile)
             else:
-                # Log this critical issue: User created, profile not.
-                # Consider this a transaction failure or raise an internal error.
-                # For now, we'll proceed, but in a real app, this needs robust handling.
-                print(f"CRITICAL: ClientProfile not created for user ID {db_user.id}")
+                 print(f"CRITICAL: ClientProfile not created or linked for user ID {db_user.id}")
 
-
+    except IntegrityError as e:
+        session.rollback()
+        print(f"IntegrityError during user creation: {e}") # Log full error for debugging
+        # Check if it's the email unique constraint (though checked above, race condition?)
+        if "UNIQUE constraint failed: user.email" in str(e).lower():
+             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered (race condition or similar).")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Error creating user due to data conflict.")
     except Exception as e:
         session.rollback()
-        print(f"Error during user creation: {e}") # Basic logging
-        raise HTTPException(status_code=500, detail=f"An error occurred during user creation.")
+        print(f"Generic error during user creation: {e}") # Log full error
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred while creating the user.")
 
     return db_user
 
@@ -961,18 +1094,256 @@ async def upload_my_profile_image(
 app.include_router(my_profile_router)
 
 
+# --- Tags Router ---
+tags_router = APIRouter(
+    prefix="/api/tags",
+    tags=["Tags Management"],
+    dependencies=[Depends(get_current_active_user)] # Base protection
+)
+
+from .database import Tag, TagCreate, TagRead # Ensure these are imported
+
+@tags_router.post("/", response_model=TagRead, status_code=status.HTTP_201_CREATED)
+def create_tag(
+    tag_in: TagCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    existing_tag = session.exec(
+        select(Tag).where(func.lower(Tag.name) == func.lower(tag_in.name))
+    ).first()
+    if existing_tag:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Tag name '{tag_in.name}' already exists."
+        )
+
+    db_tag = Tag.model_validate(tag_in)
+    try:
+        session.add(db_tag)
+        session.commit()
+        session.refresh(db_tag)
+        return db_tag
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tag name likely already exists (race condition).")
+
+@tags_router.get("/", response_model=List[TagRead])
+def read_tags(
+    skip: int = 0,
+    limit: int = 100,
+    name_filter: Optional[str] = None,
+    session: Session = Depends(get_session)
+):
+    query = select(Tag)
+    if name_filter:
+        query = query.where(Tag.name.ilike(f"%{name_filter}%"))
+
+    query = query.order_by(Tag.name).offset(skip).limit(limit)
+    tags = session.exec(query).all()
+    return tags
+
+@tags_router.get("/{tag_id}", response_model=TagRead)
+def read_tag(
+    tag_id: int,
+    session: Session = Depends(get_session)
+):
+    db_tag = session.get(Tag, tag_id)
+    if not db_tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+    return db_tag
+
+@tags_router.put("/{tag_id}", response_model=TagRead)
+def update_tag(
+    tag_id: int,
+    tag_in: TagCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    db_tag = session.get(Tag, tag_id)
+    if not db_tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+
+    if func.lower(db_tag.name) != func.lower(tag_in.name):
+        existing_tag_with_new_name = session.exec(
+            select(Tag).where(func.lower(Tag.name) == func.lower(tag_in.name))
+        ).first()
+        if existing_tag_with_new_name:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Another tag with name '{tag_in.name}' already exists."
+            )
+
+    db_tag.name = tag_in.name
+    try:
+        session.add(db_tag)
+        session.commit()
+        session.refresh(db_tag)
+        return db_tag
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tag name likely already exists (race condition).")
+
+@tags_router.delete("/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tag(
+    tag_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    db_tag = session.get(Tag, tag_id)
+    if not db_tag:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
+
+    session.delete(db_tag)
+    session.commit()
+    return
+
+app.include_router(tags_router)
+
+
+# --- Categories Router ---
+categories_router = APIRouter(
+    prefix="/api/categories",
+    tags=["Categories Management"],
+    dependencies=[Depends(get_current_active_user)] # Base protection
+)
+
+@categories_router.post("/", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
+def create_category(
+    category_in: CategoryCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    existing_category = session.exec(
+        select(Category).where(func.lower(Category.name) == func.lower(category_in.name))
+    ).first()
+    if existing_category:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Category name '{category_in.name}' already exists."
+        )
+
+    db_category = Category.model_validate(category_in)
+    try:
+        session.add(db_category)
+        session.commit()
+        session.refresh(db_category)
+        return db_category
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name likely already exists (race condition).")
+
+@categories_router.get("/", response_model=List[CategoryRead])
+def read_categories(
+    skip: int = 0,
+    limit: int = 100,
+    name_filter: Optional[str] = None,
+    session: Session = Depends(get_session)
+):
+    query = select(Category)
+    if name_filter:
+        query = query.where(Category.name.ilike(f"%{name_filter}%"))
+
+    query = query.order_by(Category.name).offset(skip).limit(limit)
+    categories = session.exec(query).all()
+    return categories
+
+@categories_router.get("/{category_id}", response_model=CategoryRead)
+def read_category(
+    category_id: int,
+    session: Session = Depends(get_session)
+):
+    db_category = session.get(Category, category_id)
+    if not db_category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    return db_category
+
+@categories_router.put("/{category_id}", response_model=CategoryRead)
+def update_category(
+    category_id: int,
+    category_in: CategoryCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    db_category = session.get(Category, category_id)
+    if not db_category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    if func.lower(db_category.name) != func.lower(category_in.name):
+        existing_category_with_new_name = session.exec(
+            select(Category).where(func.lower(Category.name) == func.lower(category_in.name))
+        ).first()
+        if existing_category_with_new_name:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Another category with name '{category_in.name}' already exists."
+            )
+
+    db_category.name = category_in.name
+    db_category.description = category_in.description
+
+    try:
+        session.add(db_category)
+        session.commit()
+        session.refresh(db_category)
+        return db_category
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category name likely already exists (race condition).")
+
+@categories_router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_category(
+    category_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+
+    db_category = session.get(Category, category_id)
+    if not db_category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+
+    products_to_update = session.exec(select(Product).where(Product.category_id == category_id)).all()
+    for prod in products_to_update:
+        prod.category_id = None
+        session.add(prod)
+
+    session.delete(db_category)
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error deleting category: {str(e)}")
+
+    return
+
+app.include_router(categories_router)
+
+
 # --- User Specific Data Router (e.g., Sales History) ---
 # This router is already defined and included below.
 
 # --- Sales Router (New for creating and managing sales by admin/system) ---
-sales_router = APIRouter(
-    prefix="/api/sales",
-    tags=["Sales Management"],
-    # dependencies=[Depends(get_current_active_user)] # Protect all sales routes
-    # Or apply dependency per-endpoint if some are public/different access levels
-)
+# sales_router is defined below, this is just a marker for the diff.
+# The tags_router and its include_router call will be placed before this section.
 
-from .database import SaleCreate, SaleItem, SaleStatusEnum # Ensure SaleItem and SaleStatusEnum are imported
+from .database import SaleCreate, SaleItem, SaleStatusEnum # Tag models are imported with tags_router
 
 @sales_router.post("/", response_model=SaleRead, status_code=status.HTTP_201_CREATED)
 def create_sale(

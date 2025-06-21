@@ -15,6 +15,8 @@
             <a href="products.html" class="nav-link">Gestión de Productos</a> <!-- Link to self for consistency -->
             <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
             <a href="admin_config.html" class="nav-link" id="nav-admin-config-link" style="display:none;">Admin Config</a>
+            <a href="admin_tags.html" class="nav-link" id="nav-admin-tags-link" style="display:none;">Admin Tags</a>
+            <a href="admin_categories.html" class="nav-link" id="nav-admin-categories-link" style="display:none;">Admin Categorías</a>
             <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
             <a href="my_cart.html" class="nav-link" id="nav-cart-link" style="display:none;"><i class="fas fa-shopping-cart"></i> Carrito (<span id="cart-item-count">0</span>)</a>
             <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
@@ -65,6 +67,7 @@
                             <th>Imagen</th>
                             <th>Nombre</th>
                             <th>Categoría</th>
+                            <th>Tags</th>
                             <th>P. Revista</th>
                             <th>P. Showroom</th>
                             <th>P. Feria</th>
@@ -99,13 +102,16 @@
                     </div>
 
                     <div class="form-field-group">
-                        <label for="form-product-category">Categoría:</label>
-                        <input type="text" id="form-product-category" name="category">
+                        <label for="form-product-category-id">Categoría:</label>
+                        <select id="form-product-category-id" name="category_id">
+                            <option value="">-- Sin Categoría --</option>
+                            <!-- Options will be populated by JavaScript -->
+                        </select>
                     </div>
 
                     <div class="form-field-group">
-                        <label for="form-product-tags">Tags (separados por coma):</label>
-                        <input type="text" id="form-product-tags" name="tags">
+                        <label for="form-product-tag-names">Tags (separados por coma):</label>
+                        <input type="text" id="form-product-tag-names" name="tag_names" placeholder="Ej: frutal, verano, promo, oferta">
                     </div>
 
                     <div class="form-field-group">

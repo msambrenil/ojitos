@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Categorías - Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <a href="index.html">Showroom Natura OjitOs</a>
+        </div>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+            <a href="products.html" class="nav-link">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link">Admin Clientes</a>
+            <a href="admin_config.html" class="nav-link" id="nav-admin-config-link" style="display:none;">Admin Config</a>
+            <a href="admin_tags.html" class="nav-link" id="nav-admin-tags-link" style="display:none;">Admin Tags</a>
+            <a href="admin_categories.html" class="nav-link" id="nav-admin-categories-link" style="display:none;">Admin Categorías</a> <!-- New Link -->
+            <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
+            <a href="my_cart.html" class="nav-link" id="nav-cart-link" style="display:none;"><i class="fas fa-shopping-cart"></i> Carrito (<span id="cart-item-count">0</span>)</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <span id="user-greeting" style="display:none;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">🌙</button>
+    </header>
+
+    <main class="page-container categories-admin-container">
+        <h1>Gestión de Categorías</h1>
+
+        <section id="create-category-section" class="card-like" style="margin-bottom: 20px;">
+            <h2>Crear Nueva Categoría</h2>
+            <form id="create-category-form" class="styled-form">
+                <div class="form-field-group">
+                    <label for="new-category-name">Nombre de la Categoría:</label>
+                    <input type="text" id="new-category-name" name="name" required maxlength="100" placeholder="Ej: Perfumería">
+                </div>
+                <div class="form-field-group">
+                    <label for="new-category-description">Descripción (Opcional):</label>
+                    <textarea id="new-category-description" name="description" rows="3" maxlength="512" placeholder="Ej: Fragancias y colonias"></textarea>
+                </div>
+                <div id="create-category-error-message" class="error-message" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="submit" class="mdc-button mdc-button--raised">Crear Categoría</button>
+                </div>
+            </form>
+        </section>
+
+        <section id="list-categories-section" class="card-like">
+            <h2>Categorías Existentes</h2>
+            <div id="categories-table-placeholder">
+                <table id="categories-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre</th>
+                            <th>Descripción</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categories-table-body">
+                        <!-- Category rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="no-categories-message" class="empty-list-message" style="display:none; text-align:center; padding: 20px;">
+                No hay categorías creadas todavía.
+            </p>
+        </section>
+
+        <!-- Modal for Editing Category -->
+        <div id="edit-category-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-modal-button" id="edit-category-modal-close-button">&times;</span>
+                <h3 id="edit-category-modal-title">Editar Categoría</h3>
+                <form id="edit-category-form" class="styled-form">
+                    <input type="hidden" id="edit-category-id" name="category_id">
+                    <div class="form-field-group">
+                        <label for="edit-category-name">Nuevo Nombre:</label>
+                        <input type="text" id="edit-category-name" name="name" required maxlength="100">
+                    </div>
+                    <div class="form-field-group">
+                        <label for="edit-category-description">Nueva Descripción (Opcional):</label>
+                        <textarea id="edit-category-description" name="description" rows="3" maxlength="512"></textarea>
+                    </div>
+                    <div id="edit-category-error-message" class="error-message" style="display: none;"></div>
+                    <div class="form-actions">
+                        <button type="submit" class="mdc-button mdc-button--raised">Guardar Cambios</button>
+                        <button type="button" class="mdc-button cancel-modal-button" id="edit-category-modal-cancel-button">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Showroom Natura OjitOs</p>
+    </footer>
+
+    <script src="js/cart_guest.js" defer></script> <!-- For auth.js dependency if any -->
+    <script src="js/auth.js" defer></script>
+    <script src="js/admin_categories.js" defer></script>
+    <script>
+        // Page Protection
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!isLoggedIn()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            // Admin role check would be ideal here for frontend, but backend enforces CUD.
+        });
+    </script>
+</body>
+</html>
