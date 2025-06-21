@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewWhatsapp = document.getElementById('view-whatsapp');
     const viewGender = document.getElementById('view-gender');
     const viewClientLevel = document.getElementById('view-client-level');
+    const viewAvailablePoints = document.getElementById('view-available-points'); // Added reference
 
     const editProfileForm = document.getElementById('edit-profile-form');
     const editNicknameInput = document.getElementById('edit-nickname');
@@ -65,6 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (viewWhatsapp) viewWhatsapp.textContent = profile?.whatsapp_number || '-';
             if (viewGender) viewGender.textContent = profile?.gender || '-';
             if (viewClientLevel) viewClientLevel.textContent = profile?.client_level || '-';
+            if (viewAvailablePoints) { // Populate available points
+                const points = profile?.available_points;
+                viewAvailablePoints.textContent = (points !== null && points !== undefined) ? points.toString() : '0';
+            }
 
             // Populate edit form
             if (editNicknameInput) editNicknameInput.value = profile?.nickname || '';
@@ -146,6 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Full name and email are not editable here, client_level is admin-only
             if (viewFullname) viewFullname.textContent = responseData.full_name || '-';
             if (viewEmail) viewEmail.textContent = responseData.email || '-';
+            // Refresh points display after profile update, though this form doesn't change points
+            if (viewAvailablePoints && responseData.client_profile) {
+                const points = responseData.client_profile.available_points;
+                viewAvailablePoints.textContent = (points !== null && points !== undefined) ? points.toString() : '0';
+            }
 
 
         } catch (error) {
