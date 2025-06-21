@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 from sqlalchemy import or_, func # Added func
 from sqlalchemy.exc import IntegrityError # Added IntegrityError
+from sqlalchemy.orm import selectinload # Added for eager loading
 # typing.Optional is already imported at the top
 
 from passlib.context import CryptContext
@@ -95,7 +96,8 @@ from .database import (
     ProductUpdate,
     SiteConfiguration,  # Added SiteConfiguration import
     Tag, TagRead,        # Added Tag and TagRead for product tag management
-    Category, CategoryCreate, CategoryRead # Added Category models
+    Category, CategoryCreate, CategoryRead, # Added Category models
+    CatalogEntry, CatalogEntryCreate, CatalogEntryUpdate, CatalogEntryApiResponse # Added CatalogEntry models
 )
 
 
@@ -1334,6 +1336,178 @@ def delete_category(
     return
 
 app.include_router(categories_router)
+
+
+# --- CatalogEntry Helper Function ---
+def _build_catalog_entry_response(db_entry: CatalogEntry, session: Session) -> CatalogEntryApiResponse:
+    # Ensure product relationship is loaded for calculations and ProductRead serialization
+    # Check if relationship is already loaded; if not, refresh.
+    # This check might be version-dependent for SQLModel/SQLAlchemy behavior with relationships.
+    # A common way to check if a relationship is loaded without triggering a lazy load
+    # is to check if the attribute is in the instance's __dict__.
+    # However, session.refresh is more explicit if we are unsure.
+    if 'product' not in db_entry.__dict__ or not db_entry.product:
+         session.refresh(db_entry, ["product"])
+
+    if not db_entry.product:
+        # This case should be rare if FK constraints are active and product was loaded/refreshed.
+        # It implies a data integrity issue (e.g., product deleted after catalog entry was made without FK enforcement)
+        # or a failure in loading the relationship.
+        # For robustness, we might log this and decide how to handle.
+        # For now, let's assume if it's still not loaded, something is critically wrong.
+        print(f"Critical: Product not loaded for CatalogEntry ID {db_entry.id} even after refresh attempt.")
+        # Depending on strictness, could raise 500 or try to build response without product.
+        # For now, let's assume product is essential for the response.
+        raise HTTPException(status_code=500, detail=f"Associated product data for catalog entry ID {db_entry.id} could not be loaded.")
+
+    eff_price = db_entry.catalog_price if db_entry.catalog_price is not None else db_entry.product.price_revista
+    eff_price = round(eff_price if eff_price is not None else 0.0, 2)
+
+    eff_img_url = db_entry.catalog_image_url if db_entry.catalog_image_url and db_entry.catalog_image_url.strip() else db_entry.product.image_url
+
+    product_read_data = ProductRead.model_validate(db_entry.product)
+
+    response_data = CatalogEntryApiResponse(
+        id=db_entry.id,
+        product_id=db_entry.product_id,
+        is_visible_in_catalog=db_entry.is_visible_in_catalog,
+        is_sold_out_in_catalog=db_entry.is_sold_out_in_catalog,
+        promo_text=db_entry.promo_text,
+        display_order=db_entry.display_order,
+        created_at=db_entry.created_at,
+        updated_at=db_entry.updated_at,
+        catalog_price=db_entry.catalog_price,
+        catalog_image_url=db_entry.catalog_image_url,
+        product=product_read_data,
+        effective_price=eff_price,
+        effective_image_url=eff_img_url
+    )
+    return response_data
+
+# --- Catalog Admin Router ---
+catalog_admin_router = APIRouter(
+    prefix="/api/admin/catalog",
+    tags=["Admin - Catalog Management"],
+    dependencies=[Depends(get_current_active_user)]
+)
+
+@catalog_admin_router.post("/entries/", response_model=CatalogEntryApiResponse, status_code=status.HTTP_201_CREATED)
+def create_catalog_entry_admin(
+    entry_in: CatalogEntryCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    product = session.get(Product, entry_in.product_id)
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product with ID {entry_in.product_id} not found")
+
+    db_entry = CatalogEntry.model_validate(entry_in)
+    try:
+        session.add(db_entry)
+        session.commit()
+        session.refresh(db_entry)
+        # Ensure product is loaded for the response builder by explicitly refreshing the relationship
+        session.refresh(db_entry, ["product"]) # SQLModel specific way to refresh a relationship
+        return _build_catalog_entry_response(db_entry, session)
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Product already in catalog or other integrity error.")
+
+@catalog_admin_router.get("/entries/", response_model=List[CatalogEntryApiResponse])
+def read_catalog_entries_admin(
+    skip: int = 0,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    entries_query = select(CatalogEntry).options(selectinload(CatalogEntry.product)).order_by(CatalogEntry.display_order, CatalogEntry.id).offset(skip).limit(limit)
+    db_entries = session.exec(entries_query).all()
+
+    return [_build_catalog_entry_response(entry, session) for entry in db_entries]
+
+@catalog_admin_router.get("/entries/{entry_id}", response_model=CatalogEntryApiResponse)
+def read_single_catalog_entry_admin(
+    entry_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    db_entry = session.exec(
+        select(CatalogEntry).where(CatalogEntry.id == entry_id).options(selectinload(CatalogEntry.product))
+    ).first()
+    if not db_entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catalog entry not found")
+    return _build_catalog_entry_response(db_entry, session)
+
+@catalog_admin_router.put("/entries/{entry_id}", response_model=CatalogEntryApiResponse)
+def update_catalog_entry_admin(
+    entry_id: int,
+    entry_update: CatalogEntryUpdate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    db_entry = session.get(CatalogEntry, entry_id)
+    if not db_entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catalog entry not found")
+
+    update_data = entry_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_entry, key, value)
+    db_entry.updated_at = datetime.now(timezone.utc)
+
+    session.add(db_entry)
+    session.commit()
+    session.refresh(db_entry)
+    session.refresh(db_entry, ["product"]) # Ensure product is loaded for response
+    return _build_catalog_entry_response(db_entry, session)
+
+@catalog_admin_router.delete("/entries/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_catalog_entry_admin(
+    entry_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_active_user)
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
+    db_entry = session.get(CatalogEntry, entry_id)
+    if not db_entry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catalog entry not found")
+
+    session.delete(db_entry)
+    session.commit()
+    return
+
+app.include_router(catalog_admin_router)
+
+# --- Public Catalog Router ---
+catalog_public_router = APIRouter(
+    prefix="/api/catalog",
+    tags=["Public Catalog"]
+)
+
+@catalog_public_router.get("/entries/", response_model=List[CatalogEntryApiResponse])
+def read_public_catalog_entries(
+    skip: int = 0,
+    limit: int = 20, # Smaller default limit for public
+    session: Session = Depends(get_session)
+):
+    entries_query = select(CatalogEntry).where(CatalogEntry.is_visible_in_catalog == True).options(selectinload(CatalogEntry.product)).order_by(CatalogEntry.display_order, CatalogEntry.id).offset(skip).limit(limit)
+    db_entries = session.exec(entries_query).all()
+    return [_build_catalog_entry_response(entry, session) for entry in db_entries]
+
+app.include_router(catalog_public_router)
 
 
 # --- User Specific Data Router (e.g., Sales History) ---
