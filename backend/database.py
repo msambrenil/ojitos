@@ -4,7 +4,7 @@ from typing import Optional, Any, Dict, List
 import enum # Added enum import
 from sqlalchemy import create_engine, UniqueConstraint
 from sqlmodel import Field, Session, SQLModel, Relationship
-from pydantic import model_validator, computed_field
+from pydantic import model_validator, computed_field, BaseModel # Added BaseModel
 
 
 DATABASE_URL = "sqlite:///./showroom_natura.db"
@@ -160,6 +160,8 @@ class Product(ProductBase, table=True):
     # Inherits all fields from ProductBase
     # price_showroom and price_feria will store the calculated values if provided,
     # or the result of calculations if not. They remain Optional in the DB.
+    catalog_entry_rel: Optional["CatalogEntry"] = Relationship(back_populates="product")
+
 
 class ProductCreate(ProductBase): # Inherits name, desc, prices, stock etc. from ProductBase
     category_id: Optional[int] = Field(default=None) # For linking to a category
@@ -362,6 +364,31 @@ class WishlistItemRead(WishlistItemBase):
     user_id: int
     added_at: datetime
     product: ProductRead # Embed Product details
+
+class CatalogEntryApiResponse(BaseModel):
+    # Fields from CatalogEntry table model / CatalogEntryBase
+    id: int
+    product_id: int
+    is_visible_in_catalog: bool
+    is_sold_out_in_catalog: bool
+    promo_text: Optional[str] = None
+    display_order: int
+    created_at: datetime
+    updated_at: datetime
+
+    # Fields that might be overridden (actual values from CatalogEntry ORM object)
+    catalog_price: Optional[float] = None
+    catalog_image_url: Optional[str] = None
+
+    # Nested product details
+    product: ProductRead
+
+    # Effective fields to be calculated and populated by endpoint logic
+    effective_price: float
+    effective_image_url: Optional[str]
+
+    class Config:
+        from_attributes = True # For Pydantic V2, to allow creating from ORM objects
 
 
 # --- Cart Models ---

@@ -183,7 +183,8 @@ function updateAuthUI() {
     const adminClientsLink = document.getElementById('nav-admin-clients-link');
     const adminConfigLink = document.getElementById('nav-admin-config-link');
     const adminTagsLink = document.getElementById('nav-admin-tags-link');
-    const adminCategoriesLink = document.getElementById('nav-admin-categories-link'); // Added adminCategoriesLink
+    const adminCategoriesLink = document.getElementById('nav-admin-categories-link');
+    const adminCatalogLink = document.getElementById('nav-admin-catalog-link'); // Added adminCatalogLink
     const wishlistLink = document.getElementById('nav-wishlist-link');
     const navCartLink = document.getElementById('nav-cart-link');
 
@@ -208,12 +209,14 @@ function updateAuthUI() {
             if (adminClientsLink) adminClientsLink.style.display = 'inline';
             if (adminConfigLink) adminConfigLink.style.display = 'inline';
             if (adminTagsLink) adminTagsLink.style.display = 'inline';
-            if (adminCategoriesLink) adminCategoriesLink.style.display = 'inline'; // Show categories link for admin
+            if (adminCategoriesLink) adminCategoriesLink.style.display = 'inline';
+            if (adminCatalogLink) adminCatalogLink.style.display = 'inline'; // Show catalog link for admin
         } else {
             if (adminClientsLink) adminClientsLink.style.display = 'none';
             if (adminConfigLink) adminConfigLink.style.display = 'none';
             if (adminTagsLink) adminTagsLink.style.display = 'none';
-            if (adminCategoriesLink) adminCategoriesLink.style.display = 'none'; // Hide categories link for non-admin
+            if (adminCategoriesLink) adminCategoriesLink.style.display = 'none';
+            if (adminCatalogLink) adminCatalogLink.style.display = 'none'; // Hide catalog link for non-admin
         }
 
     } else { // Not logged in
@@ -231,6 +234,7 @@ function updateAuthUI() {
         if (adminConfigLink) adminConfigLink.style.display = 'none';
         if (adminTagsLink) adminTagsLink.style.display = 'none';
         if (adminCategoriesLink) adminCategoriesLink.style.display = 'none';
+        if (adminCatalogLink) adminCatalogLink.style.display = 'none';
     }
     updateCartIndicator();
 }

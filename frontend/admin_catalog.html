@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Catálogo - Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@300..700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/material-dynamic-colors@1.1.0/dist/material-dynamic-colors.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo-container">
+            <a href="index.html">Showroom Natura OjitOs</a>
+        </div>
+        <nav>
+            <a href="index.html" class="nav-link">Dashboard</a>
+            <a href="products.html" class="nav-link">Gestión de Productos</a>
+            <a href="admin_clients.html" class="nav-link" id="nav-admin-clients-link" style="display:none;">Admin Clientes</a>
+            <a href="admin_config.html" class="nav-link" id="nav-admin-config-link" style="display:none;">Admin Config</a>
+            <a href="admin_tags.html" class="nav-link" id="nav-admin-tags-link" style="display:none;">Admin Tags</a>
+            <a href="admin_categories.html" class="nav-link" id="nav-admin-categories-link" style="display:none;">Admin Categorías</a>
+            <a href="admin_catalog.html" class="nav-link" id="nav-admin-catalog-link" style="display:none;">Admin Catálogo</a> <!-- New Link -->
+            <a href="my_wishlist.html" class="nav-link" id="nav-wishlist-link" style="display:none;">Mi Wishlist</a>
+            <a href="my_cart.html" class="nav-link" id="nav-cart-link" style="display:none;"><i class="fas fa-shopping-cart"></i> Carrito (<span id="cart-item-count">0</span>)</a>
+            <a href="my_profile.html" class="nav-link" id="nav-profile-link" style="display:none;">Mi Perfil</a>
+            <a href="login.html" class="nav-link" id="nav-login-link">Login</a>
+            <span id="user-greeting" style="display:none;"></span>
+            <button id="nav-logout-button" class="nav-link mdc-button--outlined" style="display:none;">Logout</button>
+        </nav>
+        <button id="theme-toggle-button" aria-label="Toggle dark mode">🌙</button>
+    </header>
+
+    <main class="page-container catalog-admin-container">
+        <h1>Gestión de Catálogo</h1>
+
+        <section id="catalog-actions-section" class="card-like" style="margin-bottom: 20px; padding: 15px;">
+             <button type="button" id="add-to-catalog-button" class="mdc-button mdc-button--raised">
+                <i class="fas fa-plus" style="margin-right: 8px;"></i>Añadir Producto al Catálogo
+            </button>
+        </section>
+
+        <section id="list-catalog-entries-section" class="card-like">
+            <h2>Entradas del Catálogo</h2>
+            <div id="catalog-entries-table-placeholder">
+                <table id="catalog-entries-table" class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID Cat.</th>
+                            <th>Prod. ID</th>
+                            <th>Nombre Producto</th>
+                            <th>Precio Efectivo</th>
+                            <th>Imagen Efectiva</th>
+                            <th>Visible</th>
+                            <th>Agotado (Cat.)</th>
+                            <th>Promo Text</th>
+                            <th>Orden</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="catalog-entries-table-body">
+                        <!-- Catalog entries will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="no-catalog-entries-message" class="empty-list-message" style="display:none; text-align:center; padding: 20px;">
+                No hay entradas en el catálogo todavía.
+            </p>
+        </section>
+
+        <!-- Modal for Creating/Editing Catalog Entry -->
+        <div id="catalog-entry-modal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-modal-button" id="catalog-entry-modal-close-button">&times;</span>
+                <h3 id="catalog-entry-modal-title">Añadir/Editar Entrada de Catálogo</h3>
+                <form id="catalog-entry-form" class="styled-form">
+                    <input type="hidden" id="form-entry-id" name="entry_id">
+
+                    <div class="form-field-group" id="product-selection-group">
+                        <label for="form-entry-product-id">Producto del Inventario:</label>
+                        <select id="form-entry-product-id" name="product_id" required>
+                            <option value="" disabled selected>-- Seleccionar Producto --</option>
+                            <!-- Options will be populated by JavaScript -->
+                        </select>
+                        <div id="selected-product-preview" style="margin-top: 10px; padding: 10px; border: 1px dashed var(--card-border-color); display: none; background-color: var(--background-color); border-radius: 4px;">
+                            <p style="margin:0 0 5px 0;"><strong>Producto Base Seleccionado:</strong></p>
+                            <p style="margin:0 0 5px 0;">Nombre: <span id="preview-product-name" style="font-weight:normal;">-</span></p>
+                            <p style="margin:0 0 5px 0;">Precio Original: <span id="preview-product-price" style="font-weight:normal;">-</span></p>
+                            <img id="preview-product-image" src="images/avatar_placeholder.png" alt="Vista previa producto" style="max-width: 80px; max-height: 80px; object-fit: contain; margin-top:5px; border-radius: 4px;">
+                        </div>
+                    </div>
+
+                    <fieldset style="border: 1px solid var(--card-border-color); padding: 10px; margin-top:15px; border-radius:4px;">
+                        <legend style="padding:0 5px; font-weight:bold;">Sobrescribir para Catálogo (Opcional)</legend>
+                        <div class="form-field-group">
+                            <label for="form-entry-catalog-price">Nuevo Precio en Catálogo:</label>
+                            <input type="number" id="form-entry-catalog-price" name="catalog_price" step="0.01" min="0" placeholder="Dejar vacío para usar precio del producto">
+                        </div>
+                        <div class="form-field-group">
+                            <label for="form-entry-catalog-image-url">Nueva URL de Imagen en Catálogo:</label>
+                            <input type="url" id="form-entry-catalog-image-url" name="catalog_image_url" placeholder="https://ejemplo.com/imagen_catalogo.jpg">
+                        </div>
+                        <div class="form-field-group">
+                            <label for="form-entry-promo-text">Texto Promocional Corto:</label>
+                            <input type="text" id="form-entry-promo-text" name="promo_text" maxlength="255">
+                        </div>
+                    </fieldset>
+
+                    <fieldset style="border: 1px solid var(--card-border-color); padding: 10px; margin-top:15px; border-radius:4px;">
+                        <legend style="padding:0 5px; font-weight:bold;">Configuración de Visualización</legend>
+                        <div class="form-field-group checkbox-group"> <!-- Added checkbox-group class for potential styling -->
+                            <input type="checkbox" id="form-entry-is-visible" name="is_visible_in_catalog" checked style="margin-right:5px;">
+                            <label for="form-entry-is-visible">Visible en Catálogo</label>
+                        </div>
+                        <div class="form-field-group checkbox-group">
+                            <input type="checkbox" id="form-entry-is-sold-out" name="is_sold_out_in_catalog" style="margin-right:5px;">
+                            <label for="form-entry-is-sold-out">Marcar como Agotado en Catálogo</label>
+                        </div>
+                        <div class="form-field-group">
+                            <label for="form-entry-display-order">Orden de Visualización (menor aparece primero):</label>
+                            <input type="number" id="form-entry-display-order" name="display_order" value="0" step="1" min="0">
+                        </div>
+                    </fieldset>
+                    <div id="catalog-entry-error-message" class="error-message" style="display: none;"></div>
+                    <div class="form-actions">
+                        <button type="submit" class="mdc-button mdc-button--raised">Guardar</button>
+                        <button type="button" class="mdc-button cancel-modal-button" id="catalog-entry-modal-cancel-button">Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Showroom Natura OjitOs</p>
+    </footer>
+
+    <script src="js/cart_guest.js" defer></script>
+    <script src="js/auth.js" defer></script>
+    <script src="js/admin_catalog.js" defer></script>
+    <script>
+        // Page Protection
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!isLoggedIn()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            const userInfo = getCurrentUserInfo();
+            if (!userInfo || !userInfo.isSuperuser) {
+                // Redirect non-admins or if user info is not available
+                alert("Acceso denegado. Se requieren permisos de administrador.");
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1203,3 +1203,33 @@ body.dark-mode {
     --success-border-color: #66BB6A;
 }
 */
+
+/* Catalog Entry Form Specific Fieldset/Legend & Checkbox Styling */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px; /* Or adjust as needed */
+}
+.checkbox-group input[type="checkbox"] {
+    margin-right: 8px;
+    /* Potentially add width/height if browser defaults are too small */
+}
+.checkbox-group label {
+    margin-bottom: 0; /* Override default form-field-group label margin if it's too much */
+    font-weight: normal; /* Labels for checkboxes usually not bold */
+}
+
+/* Adjust fieldset/legend if not already styled well by .card-like or browser defaults */
+#catalog-entry-form fieldset {
+    border: 1px solid var(--card-border-color);
+    padding: 15px 20px; /* More padding */
+    margin-top: 20px;
+    border-radius: 6px; /* Match card-like if that has one */
+    background-color: var(--background-color); /* Ensure it has a background if modal content is transparent */
+}
+ #catalog-entry-form fieldset legend {
+    padding: 0 10px; /* More space around legend */
+    font-weight: bold;
+    font-size: 1.1em; /* Slightly larger legend */
+    color: var(--text-color);
+}
