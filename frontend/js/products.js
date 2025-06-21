@@ -1,3 +1,5 @@
+let availableCategories = []; // For caching categories
+
 // DOM Elements
 const productModal = document.getElementById('product-form-section');
 const productForm = document.getElementById('product-form');
@@ -5,8 +7,9 @@ const modalTitle = document.getElementById('modal-title');
 const productIdField = document.getElementById('form-product-id');
 const productNameField = document.getElementById('form-product-name');
 const productDescriptionField = document.getElementById('form-product-description');
-const productCategoryField = document.getElementById('form-product-category');
-const productTagsField = document.getElementById('form-product-tags');
+// const productCategoryField = document.getElementById('form-product-category'); // Old text input
+const formProductCategoryIdSelect = document.getElementById('form-product-category-id'); // New select dropdown
+const formProductTagNamesInput = document.getElementById('form-product-tag-names');
 const productPriceRevistaField = document.getElementById('form-product-price-revista');
 const productStockActualField = document.getElementById('form-product-stock-actual');
 const productStockCriticoField = document.getElementById('form-product-stock-critico');
@@ -28,7 +31,9 @@ function closeProductModal() {
     if(productModal) productModal.style.display = 'none';
     if(productForm) productForm.reset();
     if(currentImagePreview) currentImagePreview.innerHTML = '';
-    if(productIdField) productIdField.value = ''; // Clear product ID on close
+    if(productIdField) productIdField.value = '';
+    if (formProductTagNamesInput) formProductTagNamesInput.value = '';
+    if (formProductCategoryIdSelect) formProductCategoryIdSelect.value = ""; // Reset category dropdown
 }
 
 // Event Listeners for Modal Control
@@ -74,8 +79,19 @@ async function openModalForEdit(productId) {
         if(productIdField) productIdField.value = product.id;
         if(productNameField) productNameField.value = product.name || '';
         if(productDescriptionField) productDescriptionField.value = product.description || '';
-        if(productCategoryField) productCategoryField.value = product.category || '';
-        if(productTagsField) productTagsField.value = product.tags || '';
+        // if(productCategoryField) productCategoryField.value = product.category || ''; // Old category text input
+
+        if (formProductCategoryIdSelect) { // New category select dropdown
+            formProductCategoryIdSelect.value = product.category?.id || "";
+        }
+
+        if (formProductTagNamesInput) {
+            if (product.tags && product.tags.length > 0) {
+                formProductTagNamesInput.value = product.tags.map(tag => tag.name).join(', ');
+            } else {
+                formProductTagNamesInput.value = '';
+            }
+        }
         if(productPriceRevistaField) productPriceRevistaField.value = product.price_revista !== null ? product.price_revista.toString() : '';
         // price_showroom and price_feria are not directly editable in this form, they are derived.
         if(productStockActualField) productStockActualField.value = product.stock_actual !== null ? product.stock_actual.toString() : '';
@@ -102,6 +118,33 @@ async function handleFormSubmit(event) {
     if (!productForm) return;
 
     const formData = new FormData(productForm);
+    // Handle tag_names
+    formData.delete('tag_names'); // Remove if picked by new FormData()
+    const tagNamesString = formProductTagNamesInput ? formProductTagNamesInput.value.trim() : "";
+    if (tagNamesString) {
+        const tagNamesArray = tagNamesString.split(',').map(name => name.trim()).filter(name => name.length > 0);
+        tagNamesArray.forEach(tagName => {
+            formData.append('tag_names', tagName);
+        });
+    }
+
+    // Handle category_id
+    const categoryIdValue = formProductCategoryIdSelect ? formProductCategoryIdSelect.value : "";
+    if (categoryIdValue === "") {
+        if (formData.has('category_id')) { // If FormData picked up the empty value from select's name
+            formData.delete('category_id'); // Remove it, so backend sees it as None
+        }
+    } else {
+        // If categoryIdValue is valid, FormData(productForm) already has it due to name="category_id"
+        // If it was somehow missed or if we want to be explicit:
+        // if (!formData.has('category_id') || formData.get('category_id') !== categoryIdValue) {
+        //    if(formData.has('category_id')) formData.delete('category_id');
+        //    formData.append('category_id', categoryIdValue);
+        // }
+        // For now, assume FormData(productForm) correctly picks up category_id if value is not empty.
+        // The crucial part is deleting it if it's an empty string.
+    }
+
     const currentProductId = productIdField ? productIdField.value : null;
 
     let method = 'POST';
@@ -202,7 +245,8 @@ async function fetchAndDisplayProducts(filters = {}) {
         productTableBody.innerHTML = '';
 
         if (products.length === 0) {
-            productTableBody.innerHTML = '<tr><td colspan="10">No se encontraron productos con los filtros aplicados.</td></tr>';
+            // Colspan is now 11 (Imagen, Nombre, Categoría, Tags, P.Rev, P.Show, P.Feria, Stock, StockCrit, Wishlist, Acciones)
+            productTableBody.innerHTML = '<tr><td colspan="11">No se encontraron productos con los filtros aplicados.</td></tr>';
             return;
         }
 
@@ -222,7 +266,16 @@ async function fetchAndDisplayProducts(filters = {}) {
             imageCell.appendChild(img);
 
             row.insertCell().textContent = product.name;
-            row.insertCell().textContent = product.category || '-';
+            row.insertCell().textContent = product.category?.name || '-'; // Display category name
+
+            // Tags cell
+            const tagsCell = row.insertCell();
+            if (product.tags && product.tags.length > 0) {
+                tagsCell.textContent = product.tags.map(tag => tag.name).join(', ');
+            } else {
+                tagsCell.textContent = '-';
+            }
+
             row.insertCell().textContent = product.price_revista.toFixed(2);
             row.insertCell().textContent = (product.price_showroom !== null ? product.price_showroom.toFixed(2) : '-');
             row.insertCell().textContent = (product.price_feria !== null ? product.price_feria.toFixed(2) : '-');
@@ -265,7 +318,8 @@ async function fetchAndDisplayProducts(filters = {}) {
     } catch (error) {
         console.error("Error fetching products:", error);
         if (productTableBody) {
-            productTableBody.innerHTML = `<tr><td colspan="10">Error al cargar productos: ${error.message}. Ver consola para más detalles.</td></tr>`;
+            // Colspan is now 11
+            productTableBody.innerHTML = `<tr><td colspan="11">Error al cargar productos: ${error.message}. Ver consola para más detalles.</td></tr>`;
         }
     }
 }
@@ -399,18 +453,47 @@ document.addEventListener('DOMContentLoaded', () => {
     // Page protection: Ensure user is logged in AND is admin to view this page.
     // This is a basic check. Robust protection should be on the backend.
     if (typeof isLoggedIn === 'function' && isLoggedIn()) {
-        // Assuming an isAdmin function or similar check is available from auth.js
-        // For now, if logged in, try to fetch. Backend will enforce admin role.
-        console.log("User is logged in. Fetching products.");
-        fetchAndDisplayProducts(); // Initial fetch with no filters
+        console.log("User is logged in. Initializing product page.");
+        populateCategoryDropdown(); // Populate categories first
+        fetchAndDisplayProducts(); // Then fetch products
     } else {
         console.log("User not logged in or auth functions not available. Redirecting to login.");
-        // Redirect to login if not authenticated
-        // Ensure auth.js is loaded and has already checked token validity by this point.
-        // If direct navigation to products.html, auth.js might not have finished.
-        // Better to rely on auth.js to redirect if needed, or have a global auth check.
-        // For now, if fetch fails due to 401/403, it will handle logout/redirect.
-        // If getToken() is null, fetchAndDisplayProducts will redirect.
-         fetchAndDisplayProducts(); // Attempt fetch; it will handle token absence.
+         fetchAndDisplayProducts(); // Attempt fetch; it will handle token absence and redirect.
     }
 });
+
+// --- Category Dropdown Population ---
+async function populateCategoryDropdown() {
+    if (!formProductCategoryIdSelect) {
+        console.warn("Category select dropdown not found on this page.");
+        return;
+    }
+
+    const token = getToken(); // Needed if /api/categories is protected
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/categories/?limit=1000`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        if (!response.ok) {
+            console.error("Failed to fetch categories for dropdown. Status:", response.status);
+            // Optionally display an error message to the user, e.g., in a modal status area
+            return;
+        }
+        availableCategories = await response.json(); // Store globally
+
+        // Clear existing options (except the first default one: "-- Sin Categoría --")
+        while (formProductCategoryIdSelect.options.length > 1) {
+            formProductCategoryIdSelect.remove(1);
+        }
+
+        availableCategories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category.id;
+            option.textContent = category.name;
+            formProductCategoryIdSelect.appendChild(option);
+        });
+        console.log("Category dropdown populated.");
+    } catch (error) {
+        console.error("Error populating category dropdown:", error);
+    }
+}

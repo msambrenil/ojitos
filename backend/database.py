@@ -20,8 +20,9 @@ def create_db_and_tables():
 class UserBase(SQLModel):
     email: str = Field(unique=True, index=True) # Changed username to email as primary identifier
     full_name: Optional[str] = None
-    is_active: bool = True
-    is_superuser: bool = False
+    is_active: bool = Field(default=True) # Default from previous updates
+    is_superuser: bool = Field(default=False) # Default from previous updates
+    is_seller: bool = Field(default=False)
     # Removed: username, disabled
 
 class User(UserBase, table=True):
@@ -85,13 +86,59 @@ class ClientProfileRead(ClientProfileBase): # Now inherits from ClientProfileBas
     # nickname, whatsapp_number, etc. are inherited from ClientProfileBase
 
 
+# --- Tag and ProductTag Link Models ---
+class ProductTag(SQLModel, table=True):
+    tag_id: Optional[int] = Field(default=None, foreign_key="tag.id", primary_key=True)
+    product_id: Optional[int] = Field(default=None, foreign_key="product.id", primary_key=True)
+
+class Tag(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True, max_length=100, nullable=False)
+
+    products: List["Product"] = Relationship(back_populates="tags", link_model=ProductTag)
+
+# Pydantic Schemas for Tag
+class TagBase(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+
+class TagCreate(TagBase):
+    pass
+
+class TagRead(TagBase):
+    id: int
+
+
+# --- Category Model ---
+class Category(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True, max_length=100, nullable=False)
+    description: Optional[str] = Field(default=None, max_length=512)
+
+    # Relationship to Product model
+    products: List["Product"] = Relationship(back_populates="category_obj")
+
+# Pydantic Schemas for Category
+class CategoryBase(SQLModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=512)
+
+class CategoryCreate(CategoryBase):
+    pass
+
+class CategoryRead(CategoryBase):
+    id: int
+
+class CategoryReadWithProducts(CategoryRead):
+    products: List["ProductRead"] = []
+
+
 # --- Product Models ---
 
-class ProductBase(SQLModel):
+class ProductBase(SQLModel): # Fields common to ProductRead, does not include category_id
     name: str
     description: Optional[str] = None
-    category: Optional[str] = Field(default=None, index=True)
-    tags: Optional[str] = Field(default=None) # Could be a JSON string or handled differently
+    # category: Optional[str] = Field(default=None, index=True) # Removed old string category field
+    # tags: Optional[str] = Field(default=None) # Removed old string tags field
     image_url: Optional[str] = Field(default=None)
 
     price_revista: float = Field(default=0.0)
@@ -103,12 +150,21 @@ class ProductBase(SQLModel):
 
 class Product(ProductBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    wished_by_users: List["WishlistItem"] = Relationship(back_populates="product") # Added wished_by_users
+    wished_by_users: List["WishlistItem"] = Relationship(back_populates="product")
+
+    tags: List["Tag"] = Relationship(back_populates="products", link_model=ProductTag)
+
+    # Category relationship
+    category_id: Optional[int] = Field(default=None, foreign_key="category.id", index=True, nullable=True)
+    category_obj: Optional["Category"] = Relationship(back_populates="products")
     # Inherits all fields from ProductBase
     # price_showroom and price_feria will store the calculated values if provided,
     # or the result of calculations if not. They remain Optional in the DB.
 
-class ProductCreate(ProductBase):
+class ProductCreate(ProductBase): # Inherits name, desc, prices, stock etc. from ProductBase
+    category_id: Optional[int] = Field(default=None) # For linking to a category
+    tag_names: Optional[List[str]] = Field(default_factory=list)
+
     @model_validator(mode='before')
     @classmethod
     def calculate_derived_prices(cls, values: Dict[str, Any]) -> Dict[str, Any]:
@@ -125,8 +181,8 @@ class ProductCreate(ProductBase):
 class ProductUpdate(SQLModel): # All fields should be optional for updates
     name: Optional[str] = None
     description: Optional[str] = None
-    category: Optional[str] = Field(default=None, index=True) # Index might not be updatable this way, but field is optional
-    tags: Optional[str] = None
+    category_id: Optional[int] = Field(default=None) # Allow updating or unsetting category
+    tag_names: Optional[List[str]] = None
     image_url: Optional[str] = None
 
     price_revista: Optional[float] = None
@@ -152,8 +208,10 @@ class ProductUpdate(SQLModel): # All fields should be optional for updates
         # then existing values in DB remain (or they are set to None if that's passed).
         return values
 
-class ProductRead(ProductBase):
+class ProductRead(ProductBase): # ProductBase no longer has string category or tags
     id: int
+    tags: List[TagRead] = []
+    category: Optional["CategoryRead"] = None # Populated from product.category_obj
     # This model ensures that when reading data, it conforms to ProductBase structure + id.
     # The calculated prices should be populated by the create/update logic before saving.
 
@@ -372,3 +430,77 @@ class CartRead(SQLModel): # For API response for the whole cart
             if item.product and isinstance(item.product.price_revista, (int, float)):
                 total += item.quantity * item.product.price_revista
         return round(total, 2)
+
+
+# --- Site Configuration Model ---
+class SiteConfiguration(SQLModel, table=True):
+    # Using a fixed ID to enforce a singleton pattern (only one row in this table)
+    # The application logic will always try to get/update the row with id=1.
+    id: Optional[int] = Field(default=1, primary_key=True, nullable=False)
+
+    site_name: Optional[str] = Field(default="Showroom Natura OjitOs", max_length=255)
+    contact_email: Optional[str] = Field(default=None, max_length=255)
+    contact_phone: Optional[str] = Field(default=None, max_length=50)
+    logo_url: Optional[str] = Field(default=None, max_length=512) # URL or path to logo
+
+    # Brand Colors (stored as hex, e.g., "#RRGGBB")
+    color_primary: Optional[str] = Field(default="#E83E8C", max_length=7) # Example: Natura Pink
+    color_secondary: Optional[str] = Field(default="#FF7F00", max_length=7) # Example: Natura Orange
+    color_accent: Optional[str] = Field(default="#4CAF50", max_length=7)  # Example: Natura Green
+
+    # Social Media Links
+    social_instagram_url: Optional[str] = Field(default=None, max_length=512)
+    social_tiktok_url: Optional[str] = Field(default=None, max_length=512)
+    social_whatsapp_url: Optional[str] = Field(default=None, max_length=512) # e.g., wa.me link
+    online_fair_url: Optional[str] = Field(default=None, max_length=512)
+
+    # Physical Address
+    showroom_address: Optional[str] = Field(default=None, max_length=1024) # Free text or structured JSON string
+
+    # System Parameters
+    system_param_points_per_currency_unit: Optional[float] = Field(default=0.1, ge=0) # e.g., 0.1 points per S/.1
+    system_param_default_showroom_discount_percentage: Optional[int] = Field(default=20, ge=0, le=100)
+
+    # Timestamps
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        sa_column_kwargs={"onupdate": datetime.utcnow},
+        nullable=False
+    )
+
+
+# --- Site Configuration Pydantic Schemas ---
+class SiteConfigurationRead(SQLModel):
+    # Based on SiteConfiguration table model, id is not usually sent to client for singleton config
+    site_name: str # Has default in table, so expected in read
+    contact_email: Optional[str]
+    contact_phone: Optional[str]
+    logo_url: Optional[str] # URL for the logo, managed by separate endpoint
+    color_primary: str # Has default
+    color_secondary: str # Has default
+    color_accent: str # Has default
+    social_instagram_url: Optional[str]
+    social_tiktok_url: Optional[str]
+    social_whatsapp_url: Optional[str]
+    online_fair_url: Optional[str]
+    showroom_address: Optional[str]
+    system_param_points_per_currency_unit: float # Has default
+    system_param_default_showroom_discount_percentage: int # Has default
+    updated_at: datetime
+
+class SiteConfigurationUpdate(SQLModel):
+    site_name: Optional[str] = Field(default=None, max_length=255)
+    contact_email: Optional[str] = Field(default=None, max_length=255)
+    contact_phone: Optional[str] = Field(default=None, max_length=50)
+    # logo_url is managed by a separate endpoint, not included here.
+    color_primary: Optional[str] = Field(default=None, max_length=7) # Hex color validation can be added with custom validator if needed
+    color_secondary: Optional[str] = Field(default=None, max_length=7)
+    color_accent: Optional[str] = Field(default=None, max_length=7)
+    social_instagram_url: Optional[str] = Field(default=None, max_length=512)
+    social_tiktok_url: Optional[str] = Field(default=None, max_length=512)
+    social_whatsapp_url: Optional[str] = Field(default=None, max_length=512)
+    online_fair_url: Optional[str] = Field(default=None, max_length=512)
+    showroom_address: Optional[str] = Field(default=None, max_length=1024)
+    system_param_points_per_currency_unit: Optional[float] = Field(default=None, ge=0)
+    system_param_default_showroom_discount_percentage: Optional[int] = Field(default=None, ge=0, le=100)
+    # id and updated_at are not directly updatable by client.
