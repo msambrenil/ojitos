@@ -803,6 +803,14 @@ body.dark-mode {
     --warning-color-light: #FFF3E0;
     --warning-color-dark: #E65100;
     --disabled-button-bg-color: #E0E0E0; /* For disabled buttons in light mode */
+    --primary-color-light: #FCE4EC; /* Example light variant of E83E8C */
+    --primary-color-dark: #8C235F;  /* Example dark variant of E83E8C */
+}
+
+body.dark-mode {
+    /* ... existing vars ... */
+    --primary-color-light: #FCE4EC; /* Keep same light for dark mode, or adjust if needed */
+    --primary-color-dark: #8C235F;  /* Keep same dark for dark mode, or adjust if needed */
 }
 
 
@@ -1307,4 +1315,28 @@ body.dark-mode .product-card.product-sold-out .add-to-cart-catalog-button {
     font-size: 0.85em; /* Slightly smaller font */
     flex-grow: 1; /* Allow add to cart to take more space if wishlist is small */
     margin-left: 10px; /* Space between wishlist and cart button */
+}
+
+/* Redeem Gifts Page */
+#user-points-display-section {
+    background-color: var(--primary-color-light, #FCE4EC);
+    border: 1px solid var(--primary-color, #E83E8C);
+}
+body.dark-mode #user-points-display-section {
+    background-color: var(--primary-color-dark, #8C235F);
+    border: 1px solid var(--primary-color-light, #FCE4EC); /* Use light border on dark bg */
+}
+#user-available-points-gifts {
+    font-size: 1.3em;
+}
+
+.gift-item-card .gift-points-required,
+.gift-item-card .gift-stock-available {
+    font-size: 0.9em;
+    margin: 5px 0;
+    color: var(--text-color-secondary);
+}
+.gift-item-card .gift-points-required span,
+.gift-item-card .gift-stock-available span {
+    color: var(--text-color);
 }
