@@ -146,6 +146,48 @@ def on_app_startup():
     with Session(engine) as session:
         initialize_site_configuration(session)
 
+        # Create default admin user if none exists
+        def create_default_admin_if_none(session: Session):
+            existing_superuser = session.exec(select(User).where(User.is_superuser == True)).first()
+
+            if not existing_superuser:
+                print("INFO:     No superuser found. Creating default admin user...")
+                DEFAULT_ADMIN_EMAIL = "admin@example.com"
+                DEFAULT_ADMIN_PASSWORD = "adminpass"
+
+                hashed_password = get_password_hash(DEFAULT_ADMIN_PASSWORD)
+
+                default_admin_user = User(
+                    email=DEFAULT_ADMIN_EMAIL,
+                    full_name="Administrador Principal",
+                    hashed_password=hashed_password,
+                    is_active=True,
+                    is_superuser=True,
+                    is_seller=False
+                )
+
+                default_admin_client_profile = ClientProfile()
+                default_admin_user.client_profile = default_admin_client_profile
+
+                session.add(default_admin_user) # This should also add default_admin_client_profile due to relationship cascade
+
+                try:
+                    session.commit()
+                    session.refresh(default_admin_user)
+                    if default_admin_user.client_profile:
+                        session.refresh(default_admin_user.client_profile)
+
+                    print("INFO:     Default admin user created successfully.")
+                    print(f"INFO:     Admin Email: {DEFAULT_ADMIN_EMAIL}")
+                    print(f"INFO:     Admin Password: {DEFAULT_ADMIN_PASSWORD} (Change this in a production environment!)")
+                except Exception as e:
+                    session.rollback()
+                    print(f"ERROR:    Failed to create default admin user: {e}")
+            else:
+                print("INFO:     Superuser already exists. Default admin creation skipped.")
+
+        create_default_admin_if_none(session)
+
 
 class CardData(BaseModel):
     title: str
