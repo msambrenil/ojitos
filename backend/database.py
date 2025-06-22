@@ -463,10 +463,11 @@ class CartRead(SQLModel): # For API response for the whole cart
     def total_cart_price(self) -> float:
         total = 0.0
         for item in self.items:
-            # Ensure product and its price_revista are available
-            # price_revista is not optional on ProductBase, so it should exist.
-            if item.product and isinstance(item.product.price_revista, (int, float)):
-                total += item.quantity * item.product.price_revista
+            if item.product:
+                # Prioritize price_showroom if available, otherwise fallback to price_revista
+                price_to_use = item.product.price_showroom if item.product.price_showroom is not None else item.product.price_revista
+                if isinstance(price_to_use, (int, float)):
+                    total += item.quantity * price_to_use
         return round(total, 2)
 
 

@@ -261,7 +261,9 @@ products_router = APIRouter(prefix="/api/products", tags=["Products"])
 # ... (all product endpoints: POST /, GET /, GET /{id}, PUT /{id}, DELETE /{id}) ...
 # [Assume full, correct code for products_router is here]
 @products_router.post("/", response_model=ProductRead)
-async def create_product_endpoint(product_in: ProductCreate = Depends(), image: Optional[UploadFile] = File(None), session: Session = Depends(get_session)):
+async def create_product_endpoint(product_in: ProductCreate = Depends(), image: Optional[UploadFile] = File(None), session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to create products")
     image_url_for_db = None
     if image:
         filename = f"{uuid.uuid4()}_{image.filename.replace('..', '')}"
@@ -299,11 +301,11 @@ async def create_product_endpoint(product_in: ProductCreate = Depends(), image: 
     except Exception as e: session.rollback(); raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred: {str(e)}")
 
 @products_router.get("/", response_model=List[ProductRead])
-def read_products_filtered(skip: int = 0, limit: int = 100, search_term: Optional[str] = None, category: Optional[str] = None, low_stock: Optional[bool] = None, session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user) ):
+def read_products_filtered(skip: int = 0, limit: int = 100, search_term: Optional[str] = None, category_id: Optional[int] = None, low_stock: Optional[bool] = None, session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user) ):
     if not current_user.is_superuser: raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    query = select(Product)
+    query = select(Product).options(selectinload(Product.category_obj), selectinload(Product.tags)) # Eager load category and tags
     if search_term: query = query.where(or_(Product.name.ilike(f"%{search_term}%"), Product.description.ilike(f"%{search_term}%")))
-    if category: query = query.where(Product.category.ilike(f"%{category}%")) # This was an old field, might need update if category is object
+    if category_id is not None: query = query.where(Product.category_id == category_id)
     if low_stock is True: query = query.where(Product.stock_actual <= Product.stock_critico).where(Product.stock_critico > 0)
     query = query.order_by(Product.id).offset(skip).limit(limit)
     products = session.exec(query).all()
@@ -316,7 +318,9 @@ def read_product_endpoint(product_id: int, session: Session = Depends(get_sessio
     return product
 
 @products_router.put("/{product_id}", response_model=ProductRead)
-async def update_product_endpoint(product_id: int, product_update_data: ProductUpdate = Depends(), image: Optional[UploadFile] = File(None), session: Session = Depends(get_session)):
+async def update_product_endpoint(product_id: int, product_update_data: ProductUpdate = Depends(), image: Optional[UploadFile] = File(None), session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update products")
     db_product = session.get(Product, product_id)
     if not db_product: raise HTTPException(status_code=404, detail="Product not found")
     update_data = product_update_data.model_dump(exclude_unset=True)
@@ -364,7 +368,9 @@ async def update_product_endpoint(product_id: int, product_update_data: ProductU
     except Exception as e: session.rollback(); raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error updating product: {str(e)}")
 
 @products_router.delete("/{product_id}", response_model=dict)
-def delete_product_endpoint(product_id: int, session: Session = Depends(get_session)):
+def delete_product_endpoint(product_id: int, session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete products")
     product = session.get(Product, product_id)
     if not product: raise HTTPException(status_code=404, detail="Product not found")
     if product.image_url:
@@ -409,11 +415,12 @@ def create_user_and_profile(user_in: UserCreate, session: Session = Depends(get_
     return db_user
 
 # --- Admin Client Profiles Router (full definition as per previous state) ---
-admin_clients_router = APIRouter(prefix="/api/admin/client-profiles", tags=["Admin - Client Profiles"])
+admin_clients_router = APIRouter(prefix="/api/admin/client-profiles", tags=["Admin - Client Profiles"], dependencies=[Depends(get_current_active_superuser)])
 # ... (all admin client profile endpoints) ...
 # [Assume full, correct code for admin_clients_router is here]
 @admin_clients_router.get("/", response_model=List[UserReadWithClientProfile])
-def read_all_client_profiles_admin_filtered(skip: int = 0, limit: int = 100, search_term: Optional[str] = None, client_level: Optional[str] = None, is_active: Optional[bool] = None, session: Session = Depends(get_session)):
+def read_all_client_profiles_admin_filtered(skip: int = 0, limit: int = 100, search_term: Optional[str] = None, client_level: Optional[str] = None, is_active: Optional[bool] = None, session: Session = Depends(get_session), current_user: User = Depends(get_current_active_superuser)): # current_user will be superuser
+    # No need for explicit superuser check here anymore due to router dependency
     query = select(User).join(ClientProfile, isouter=True)
     if search_term: query = query.where(or_(User.full_name.ilike(f"%{search_term}%"), User.email.ilike(f"%{search_term}%"), ClientProfile.nickname.ilike(f"%{search_term}%")))
     if client_level: query = query.where(ClientProfile.client_level == client_level)
@@ -431,17 +438,17 @@ my_profile_router = APIRouter(prefix="/api/me/profile", tags=["My Profile"], dep
 async def read_my_profile(current_user: User = Depends(get_current_active_user)): return current_user
 
 # --- Tags Router (full definition) ---
-tags_router = APIRouter(prefix="/api/tags", tags=["Tags Management"], dependencies=[Depends(get_current_active_user)])
+tags_router = APIRouter(prefix="/api/tags", tags=["Tags Management"], dependencies=[Depends(get_current_active_superuser)])
 # ... (all tag endpoints) ...
 # [Assume full, correct code for tags_router is here]
 
 # --- Categories Router (full definition) ---
-categories_router = APIRouter(prefix="/api/categories", tags=["Categories Management"], dependencies=[Depends(get_current_active_user)])
+categories_router = APIRouter(prefix="/api/categories", tags=["Categories Management"], dependencies=[Depends(get_current_active_superuser)])
 # ... (all category endpoints) ...
 # [Assume full, correct code for categories_router is here]
 
 # --- Catalog Admin Router (full definition) ---
-catalog_admin_router = APIRouter(prefix="/api/admin/catalog", tags=["Admin - Catalog Management"], dependencies=[Depends(get_current_active_user)])
+catalog_admin_router = APIRouter(prefix="/api/admin/catalog", tags=["Admin - Catalog Management"], dependencies=[Depends(get_current_active_superuser)])
 # ... (all catalog admin endpoints) ...
 # [Assume full, correct code for catalog_admin_router is here]
 
@@ -451,20 +458,26 @@ catalog_public_router = APIRouter(prefix="/api/catalog", tags=["Public Catalog"]
 # [Assume full, correct code for catalog_public_router is here]
 
 # --- Admin Gift Items Router (full definition) ---
-gift_items_admin_router = APIRouter(prefix="/api/admin/gift-items", tags=["Admin - Gift Items Management"], dependencies=[Depends(get_current_active_user)])
+gift_items_admin_router = APIRouter(prefix="/api/admin/gift-items", tags=["Admin - Gift Items Management"], dependencies=[Depends(get_current_active_superuser)])
 # ... (all gift item admin endpoints) ...
 # [Assume full, correct code for gift_items_admin_router is here]
 
 # --- Admin Redemption Requests Router ---
+# Utility function for superuser dependency
+async def get_current_active_superuser(current_user: User = Depends(get_current_active_user)): # Define this function once, preferably near the top with other auth helpers
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+    return current_user
+
 redemption_admin_router = APIRouter(
     prefix="/api/admin/redemption-requests",
     tags=["Admin - Redemption Requests"],
-    dependencies=[Depends(get_current_active_user)]
+    dependencies=[Depends(get_current_active_superuser)]
 )
 
 @redemption_admin_router.get("/", response_model=List[RedemptionRequestRead])
-def list_redemption_requests_admin(skip: int = 0, limit: int = 100, user_id_filter: Optional[int] = None, status_filter: Optional[RedemptionRequestStatusEnum] = None, date_from: Optional[date] = None, date_to: Optional[date] = None, session: Session = Depends(get_session), current_user: User = Depends(get_current_active_user)):
-    if not current_user.is_superuser: raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator access required")
+def list_redemption_requests_admin(skip: int = 0, limit: int = 100, user_id_filter: Optional[int] = None, status_filter: Optional[RedemptionRequestStatusEnum] = None, date_from: Optional[date] = None, date_to: Optional[date] = None, session: Session = Depends(get_session), current_user: User = Depends(get_current_active_superuser)):
+    # No need for explicit superuser check here anymore due to router dependency
     query = select(RedemptionRequest).options(selectinload(RedemptionRequest.user).selectinload(User.client_profile), selectinload(RedemptionRequest.gift_item).selectinload(GiftItem.product))
     if user_id_filter is not None: query = query.where(RedemptionRequest.user_id == user_id_filter)
     if status_filter is not None: query = query.where(RedemptionRequest.status == status_filter)
