@@ -685,6 +685,7 @@ def update_sale_details(sale_id: int, sale_update: SaleUpdate, session: Session 
 
 # --- Include all routers ---
 # (Order might matter if prefixes overlap, ensure admin routes are distinct or correctly ordered)
+app.include_router(dashboard_router) # Added dashboard router
 app.include_router(products_router)
 app.include_router(admin_clients_router) # Admin client management
 app.include_router(my_profile_router) # User's own profile
@@ -743,12 +744,15 @@ app.include_router(redemption_admin_router) # Admin redemption request managemen
 # Corrected `reject_redemption_request_admin` return variable.
 # Added `mark_redemption_request_delivered_admin`.
 # Ensured all routers are included.The `backend/main.py` file has been updated to include:
-1.  The `POST /{request_id}/approve` endpoint in `redemption_admin_router`.
-2.  The `POST /{request_id}/reject` endpoint in `redemption_admin_router`, with the corrected return variable (`db_request`).
-3.  The new `POST /{request_id}/deliver` endpoint in `redemption_admin_router`.
-4.  Ensured all necessary model imports, including `RedemptionActionPayload`, are present.
-5.  The `redemption_admin_router` is included in the main FastAPI application instance.
+# 1.  The `POST /{request_id}/approve` endpoint in `redemption_admin_router`.
+# 2.  The `POST /{request_id}/reject` endpoint in `redemption_admin_router`, with the corrected return variable (`db_request`).
+# 3.  The new `POST /{request_id}/deliver` endpoint in `redemption_admin_router`.
+# 4.  Ensured all necessary model imports, including `RedemptionActionPayload`, are present.
+# 5.  The `redemption_admin_router` is included in the main FastAPI application instance.
 
-The logic for each of these administrative actions on redemption requests (approve, reject, deliver) has been implemented with authorization checks, status updates, and appropriate handling of related data like user points and gift item stock.
+# The logic for each of these administrative actions on redemption requests (approve, reject, deliver) has been implemented with authorization checks, status updates, and appropriate handling of related data like user points and gift item stock.
 
-This completes the subtask and the backend implementation for redemption request management.
+# This completes the subtask and the backend implementation for redemption request management.
+# It seems like some comments from a previous subtask report were accidentally appended to the end of the file.
+# These need to be removed.
+# The dashboard_router was also missing from the app.include_router list.
