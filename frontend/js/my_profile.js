@@ -34,14 +34,11 @@ document.addEventListener('DOMContentLoaded', async () => { // Made async
 
     // Assign DOM Element References
     viewFullname = document.getElementById('view-fullname');
-    const viewEmail = document.getElementById('view-email');
-    const viewNickname = document.getElementById('view-nickname');
-    const viewWhatsapp = document.getElementById('view-whatsapp');
-    const viewGender = document.getElementById('view-gender');
-    viewEmail = document.getElementById('view-email');
-    viewNickname = document.getElementById('view-nickname');
-    viewWhatsapp = document.getElementById('view-whatsapp');
-    viewGender = document.getElementById('view-gender');
+    viewEmail = document.getElementById('view-email'); // Corrected: remove const
+    viewNickname = document.getElementById('view-nickname'); // Corrected: remove const
+    viewWhatsapp = document.getElementById('view-whatsapp'); // Corrected: remove const
+    viewGender = document.getElementById('view-gender'); // Corrected: remove const
+    // Removed duplicate assignments that were already corrected by the lines above
     viewClientLevel = document.getElementById('view-client-level');
     viewAvailablePoints = document.getElementById('view-available-points');
 
