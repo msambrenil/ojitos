@@ -1,47 +1,57 @@
 from datetime import datetime
 from typing import Optional, Any, Dict, List
 
-import enum # Added enum import
-from sqlalchemy import create_engine, UniqueConstraint
+import enum # Ensure enum is imported
+from sqlalchemy import create_engine, UniqueConstraint # Ensure UniqueConstraint is imported
 from sqlmodel import Field, Session, SQLModel, Relationship
-from pydantic import model_validator, computed_field, BaseModel # Added BaseModel
+from pydantic import model_validator, computed_field, BaseModel
 
+# --- Enum Definitions ---
+class SaleStatusEnum(str, enum.Enum):
+    PENDIENTE_PREPARACION = "pendiente_preparacion"
+    ARMADO = "armado"
+    EN_CAMINO = "en_camino"
+    ENTREGADO = "entregado"
+    COBRADO = "cobrado"
+    CANCELADO = "cancelado"
+
+class RedemptionRequestStatusEnum(str, enum.Enum):
+    PENDIENTE_APROBACION = "pendiente_aprobacion"
+    APROBADO_POR_ENTREGAR = "aprobado_por_entregar"
+    ENTREGADO = "entregado"
+    RECHAZADO = "rechazado"
+    CANCELADO_POR_CLIENTE = "cancelado_por_cliente"
+# --- End of Enum Definitions ---
 
 DATABASE_URL = "sqlite:///./showroom_natura.db"
-
 engine = create_engine(DATABASE_URL, echo=True)
-
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
-
-# User Models
+# --- User Models ---
 class UserBase(SQLModel):
-    email: str = Field(unique=True, index=True) # Changed username to email as primary identifier
+    email: str = Field(unique=True, index=True)
     full_name: Optional[str] = None
-    is_active: bool = Field(default=True) # Default from previous updates
-    is_superuser: bool = Field(default=False) # Default from previous updates
+    is_active: bool = Field(default=True)
+    is_superuser: bool = Field(default=False)
     is_seller: bool = Field(default=False)
-    # Removed: username, disabled
 
 class User(UserBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     hashed_password: str
-
     client_profile: Optional["ClientProfile"] = Relationship(back_populates="user")
-    sales: List["Sale"] = Relationship(back_populates="user") # Standardized back_populates
+    sales: List["Sale"] = Relationship(back_populates="user")
     wishlist_items: List["WishlistItem"] = Relationship(back_populates="user")
     cart: Optional["Cart"] = Relationship(back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
-class UserCreate(UserBase): # For user creation, password is required
+class UserCreate(UserBase):
     password: str
 
-class UserRead(UserBase): # Basic User info for reading
+class UserRead(UserBase):
     id: int
 
-# Forward reference for ClientProfileRead used in UserReadWithClientProfile
-class ClientProfileRead(SQLModel): # Define structure first
+class ClientProfileRead(SQLModel): # Forward reference
     id: int
     user_id: int
     nickname: Optional[str] = None
@@ -49,44 +59,40 @@ class ClientProfileRead(SQLModel): # Define structure first
     gender: Optional[str] = None
     client_level: str = "Plata"
     profile_image_url: Optional[str] = None
+    available_points: int # Added this as it's in the later full definition
 
-class UserReadWithClientProfile(UserRead): # Richer user representation
+class UserReadWithClientProfile(UserRead):
     client_profile: Optional[ClientProfileRead] = None
-
 
 # --- ClientProfile Models ---
 class ClientProfileBase(SQLModel):
     nickname: Optional[str] = None
     whatsapp_number: Optional[str] = Field(default=None, index=True)
-    gender: Optional[str] = None  # Consider using an Enum later
-    client_level: str = Field(default="Plata") # Default to "Plata"
+    gender: Optional[str] = None
+    client_level: str = Field(default="Plata")
     profile_image_url: Optional[str] = None
 
 class ClientProfile(ClientProfileBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", unique=True, index=True) # Ensures one-to-one
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True)
     available_points: int = Field(default=0, ge=0, nullable=False)
-
     user: User = Relationship(back_populates="client_profile")
 
 class ClientProfileCreate(ClientProfileBase):
-    user_id: int # Required when creating a profile
+    user_id: int
 
-class ClientProfileUpdate(SQLModel): # All fields optional for PATCH-like behavior
+class ClientProfileUpdate(SQLModel):
     nickname: Optional[str] = None
     whatsapp_number: Optional[str] = None
     gender: Optional[str] = None
     client_level: Optional[str] = None
     profile_image_url: Optional[str] = None
 
-# Re-define ClientProfileRead here if it needs to inherit from ClientProfileBase
-# to pick up fields correctly. The forward reference above was just for UserReadWithClientProfile.
-class ClientProfileRead(ClientProfileBase): # Now inherits from ClientProfileBase
+# Redefine ClientProfileRead for full structure (matches the one used in UserReadWithClientProfile)
+class ClientProfileRead(ClientProfileBase): # Inherits from ClientProfileBase
     id: int
     user_id: int
-    available_points: int # Will be populated from the ORM model's field
-    # nickname, whatsapp_number, etc. are inherited from ClientProfileBase
-
+    available_points: int
 
 # --- Tag and ProductTag Link Models ---
 class ProductTag(SQLModel, table=True):
@@ -96,10 +102,8 @@ class ProductTag(SQLModel, table=True):
 class Tag(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True, max_length=100, nullable=False)
-
     products: List["Product"] = Relationship(back_populates="tags", link_model=ProductTag)
 
-# Pydantic Schemas for Tag
 class TagBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
 
@@ -109,17 +113,13 @@ class TagCreate(TagBase):
 class TagRead(TagBase):
     id: int
 
-
 # --- Category Model ---
 class Category(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True, max_length=100, nullable=False)
     description: Optional[str] = Field(default=None, max_length=512)
-
-    # Relationship to Product model
     products: List["Product"] = Relationship(back_populates="category_obj")
 
-# Pydantic Schemas for Category
 class CategoryBase(SQLModel):
     name: str = Field(min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=512)
@@ -130,254 +130,203 @@ class CategoryCreate(CategoryBase):
 class CategoryRead(CategoryBase):
     id: int
 
-class CategoryReadWithProducts(CategoryRead):
-    products: List["ProductRead"] = []
-
-
-# --- Product Models ---
-
-class ProductBase(SQLModel): # Fields common to ProductRead, does not include category_id
+class ProductRead(SQLModel): # Forward declaration for CategoryReadWithProducts
+    id: int
     name: str
     description: Optional[str] = None
-    # category: Optional[str] = Field(default=None, index=True) # Removed old string category field
-    # tags: Optional[str] = Field(default=None) # Removed old string tags field
     image_url: Optional[str] = Field(default=None)
-
     price_revista: float = Field(default=0.0)
     price_showroom: Optional[float] = Field(default=None)
     price_feria: Optional[float] = Field(default=None)
+    stock_actual: int = Field(default=0)
+    stock_critico: Optional[int] = Field(default=0)
+    tags: List[TagRead] = []
+    # category: Optional["CategoryRead"] = None # This would be circular, category is defined below
 
+class CategoryReadWithProducts(CategoryRead):
+    products: List[ProductRead] = []
+
+# --- Product Models ---
+class ProductBase(SQLModel):
+    name: str
+    description: Optional[str] = None
+    image_url: Optional[str] = Field(default=None)
+    price_revista: float = Field(default=0.0)
+    price_showroom: Optional[float] = Field(default=None)
+    price_feria: Optional[float] = Field(default=None)
     stock_actual: int = Field(default=0)
     stock_critico: Optional[int] = Field(default=0)
 
 class Product(ProductBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     wished_by_users: List["WishlistItem"] = Relationship(back_populates="product")
-
     tags: List["Tag"] = Relationship(back_populates="products", link_model=ProductTag)
-
-    # Category relationship
     category_id: Optional[int] = Field(default=None, foreign_key="category.id", index=True, nullable=True)
-    category_obj: Optional["Category"] = Relationship(back_populates="products")
-    # Inherits all fields from ProductBase
-    # price_showroom and price_feria will store the calculated values if provided,
-    # or the result of calculations if not. They remain Optional in the DB.
+    category_obj: Optional[Category] = Relationship(back_populates="products")
     catalog_entry_rel: Optional["CatalogEntry"] = Relationship(back_populates="product")
 
-
-class ProductCreate(ProductBase): # Inherits name, desc, prices, stock etc. from ProductBase
-    category_id: Optional[int] = Field(default=None) # For linking to a category
+class ProductCreate(ProductBase):
+    category_id: Optional[int] = Field(default=None)
     tag_names: Optional[List[str]] = Field(default_factory=list)
-
     @model_validator(mode='before')
     @classmethod
     def calculate_derived_prices(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         price_revista = values.get('price_revista', 0.0)
-
-        if 'price_showroom' not in values or values.get('price_showroom') is None:
-            values['price_showroom'] = price_revista * 0.80
-
-        if 'price_feria' not in values or values.get('price_feria') is None:
-            values['price_feria'] = price_revista * 0.65
-
+        if 'price_showroom' not in values or values.get('price_showroom') is None: values['price_showroom'] = price_revista * 0.80
+        if 'price_feria' not in values or values.get('price_feria') is None: values['price_feria'] = price_revista * 0.65
         return values
 
-class ProductUpdate(SQLModel): # All fields should be optional for updates
+class ProductUpdate(SQLModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    category_id: Optional[int] = Field(default=None) # Allow updating or unsetting category
+    category_id: Optional[int] = Field(default=None)
     tag_names: Optional[List[str]] = None
     image_url: Optional[str] = None
-
     price_revista: Optional[float] = None
     price_showroom: Optional[float] = None
     price_feria: Optional[float] = None
-
     stock_actual: Optional[int] = None
     stock_critico: Optional[int] = None
-
     @model_validator(mode='before')
     @classmethod
     def calculate_derived_prices_on_update(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         if 'price_revista' in values and values['price_revista'] is not None:
             price_revista = values['price_revista']
-            # Only calculate if not explicitly provided in the update payload
-            if 'price_showroom' not in values or values.get('price_showroom') is None:
-                values['price_showroom'] = price_revista * 0.80
-            if 'price_feria' not in values or values.get('price_feria') is None:
-                values['price_feria'] = price_revista * 0.65
-        # If price_revista is not being updated, but showroom/feria prices are,
-        # we let them be updated to their explicit values.
-        # If price_revista is not updated, and showroom/feria are also not updated,
-        # then existing values in DB remain (or they are set to None if that's passed).
+            if 'price_showroom' not in values or values.get('price_showroom') is None: values['price_showroom'] = price_revista * 0.80
+            if 'price_feria' not in values or values.get('price_feria') is None: values['price_feria'] = price_revista * 0.65
         return values
 
-class ProductRead(ProductBase): # ProductBase no longer has string category or tags
+class ProductRead(ProductBase): # Full definition of ProductRead
     id: int
     tags: List[TagRead] = []
-    category: Optional["CategoryRead"] = None # Populated from product.category_obj
-    # This model ensures that when reading data, it conforms to ProductBase structure + id.
-    # The calculated prices should be populated by the create/update logic before saving.
+    category: Optional[CategoryRead] = None # Now CategoryRead is defined
 
-# Client Model
+# Client Model (appears unused, but kept from original)
 class Client(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
 
-
-# Sale Models (Updated Structure)
-
-# Minimal SaleBase for Pydantic schemas (like SaleUpdate, part of SaleRead)
+# Sale Models
 class SaleBase(SQLModel):
     status: SaleStatusEnum = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION)
     discount_amount: Optional[float] = Field(default=0.0)
-    # Note: total_amount and points_earned are calculated/set by logic, not direct base input for update.
 
-class Sale(SQLModel, table=True): # Table Model
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", index=True)
-    sale_date: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
+class SaleItemRead(SQLModel): # Forward declaration for SaleRead
+    id: int
+    product_id: int
+    quantity: int
+    price_at_sale: Optional[float]
+    subtotal: float
+    product: ProductRead
 
-    status: SaleStatusEnum = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION, index=True, nullable=False)
-
-    total_amount: float = Field(default=0.0) # Calculated and stored by application logic
-    discount_amount: Optional[float] = Field(default=0.0)
-    points_earned: Optional[int] = Field(default=0) # Calculated and stored by application logic
-
-    # Relationships
-    user: User = Relationship(back_populates="sales") # Standardized relationship
-    items: List["SaleItem"] = Relationship(back_populates="sale", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
-
-
-# SaleRead will be defined after SaleItem, SaleItemRead are defined, as it might include items.
-# For now, let's update the old SaleRead to match the new SaleBase structure,
-# but it will be expanded later.
-class SaleRead(SaleBase): # Temporary update, will be expanded
+class SaleRead(SaleBase): # Forward declaration for Sale
     id: int
     user_id: int
     sale_date: datetime
     updated_at: datetime
+    items: List[SaleItemRead] = []
     total_amount: float
-    points_earned: Optional[int]
+    points_earned: int
+    user: Optional[UserRead] = None
 
+class Sale(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    sale_date: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
+    status: SaleStatusEnum = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION, index=True, nullable=False)
+    total_amount: float = Field(default=0.0)
+    discount_amount: Optional[float] = Field(default=0.0)
+    points_earned: Optional[int] = Field(default=0)
+    user: User = Relationship(back_populates="sales")
+    items: List["SaleItem"] = Relationship(back_populates="sale", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
-# --- SaleItem Models ---
 class SaleItemBase(SQLModel):
     product_id: int = Field(gt=0)
     quantity: int = Field(gt=0)
-    price_at_sale: Optional[float] = Field(default=None, ge=0) # Optional at creation, to be resolved by logic
+    price_at_sale: Optional[float] = Field(default=None, ge=0)
 
 class SaleItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     sale_id: int = Field(foreign_key="sale.id", index=True, nullable=False)
     product_id: int = Field(foreign_key="product.id", index=True, nullable=False)
     quantity: int = Field(gt=0, nullable=False)
-
-    price_at_sale: float = Field(ge=0, nullable=False) # Actual price used, required in DB
-    subtotal: float = Field(default=0.0, ge=0, nullable=False) # Calculated: quantity * price_at_sale
-
-    # Relationships
-    sale: "Sale" = Relationship(back_populates="items")
-    product: "Product" = Relationship() # Uni-directional to Product is fine
-
+    price_at_sale: float = Field(ge=0, nullable=False)
+    subtotal: float = Field(default=0.0, ge=0, nullable=False)
+    sale: Sale = Relationship(back_populates="items")
+    product: Product = Relationship()
 
 class SaleItemCreate(SaleItemBase):
-    pass # Inherits product_id, quantity, price_at_sale (optional)
+    pass
 
-class SaleItemRead(SaleItemBase):
+class SaleItemRead(SaleItemBase): # Full definition
     id: int
-    subtotal: float # This will be populated by app logic before response
-    product: "ProductRead"
+    subtotal: float
+    product: ProductRead
 
-
-# Schemas for Sale operations
 class SaleCreate(SQLModel):
-    user_id: Optional[int] = None # Admin can set this; for self-service, taken from current_user
+    user_id: Optional[int] = None
     status: Optional[SaleStatusEnum] = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION)
     discount_amount: Optional[float] = Field(default=0.0, ge=0)
     items: List[SaleItemCreate]
 
+class SaleUpdate(SaleBase):
+    pass
 
-class SaleUpdate(SaleBase): # Inherits status, discount_amount from SaleBase
-    pass # Add other specific fields an admin might update on Sale itself if any
-
-
-# Redefine SaleRead to include SaleItemRead and UserRead
-class SaleRead(SaleBase): # Inherits status, discount_amount
+class SaleRead(SaleBase): # Full definition
     id: int
     user_id: int
     sale_date: datetime
     updated_at: datetime
     items: List[SaleItemRead] = []
-
     total_amount: float
     points_earned: int
-
-    user: Optional[UserRead] = None # Embed basic user info
-
-
-# Note: The existing Client model might be for something else.
-
-# --- Sale Status Enum ---
-class SaleStatusEnum(str, enum.Enum):
-    PENDIENTE_PREPARACION = "pendiente_preparacion" # Default initial state
-    ARMADO = "armado"                             # Order is assembled
-    EN_CAMINO = "en_camino"                       # Order is out for delivery
-    ENTREGADO = "entregado"                       # Order has been delivered
-    COBRADO = "cobrado"                           # Payment has been confirmed
-    CANCELADO = "cancelado"                       # Order was cancelled
-    # PENDIENTE_PAGO = "pendiente_pago"
-    # PAGO_RECHAZADO = "pago_rechazado"
-    # DEVUELTO = "devuelto"
-
-
-# --- Redemption Request Status Enum ---
-class RedemptionRequestStatusEnum(str, enum.Enum):
-    PENDIENTE_APROBACION = "pendiente_aprobacion"  # Initial state when client requests
-    APROBADO_POR_ENTREGAR = "aprobado_por_entregar" # Admin/Seller approved, pending physical preparation/delivery
-    ENTREGADO = "entregado"                     # Client has received the gift
-    RECHAZADO = "rechazado"                       # Admin/Seller rejected the request (e.g., out of stock unexpectedly, points issue)
-    CANCELADO_POR_CLIENTE = "cancelado_por_cliente" # If clients are allowed to cancel their pending requests
-
+    user: Optional[UserRead] = None
 
 # --- User's Own Profile Update Schema ---
 class MyProfileUpdate(SQLModel):
     nickname: Optional[str] = Field(default=None)
-    whatsapp_number: Optional[str] = Field(default=None) # Consider adding validation for phone numbers later
+    whatsapp_number: Optional[str] = Field(default=None)
     gender: Optional[str] = Field(default=None)
-    # Excludes client_level (managed by admin) and profile_image_url (managed by separate endpoint)
-
 
 # --- Wishlist Models ---
 class WishlistItemBase(SQLModel):
-    product_id: int = Field(foreign_key="product.id", index=True) # product_id is essential
+    product_id: int = Field(foreign_key="product.id", index=True)
 
 class WishlistItem(WishlistItemBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
     added_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-
-    # Relationships
     user: User = Relationship(back_populates="wishlist_items")
     product: Product = Relationship(back_populates="wished_by_users")
-
-    # Unique constraint for user_id and product_id
     __table_args__ = (UniqueConstraint("user_id", "product_id", name="uq_user_product_wishlist"),)
 
 class WishlistItemCreate(WishlistItemBase):
-    pass # product_id is inherited, user_id will be from context
+    pass
 
 class WishlistItemRead(WishlistItemBase):
     id: int
     user_id: int
     added_at: datetime
-    product: ProductRead # Embed Product details
+    product: ProductRead
+
+# --- Catalog Models ---
+class CatalogEntry(SQLModel, table=True): # Assuming CatalogEntry model definition
+    id: Optional[int] = Field(default=None, primary_key=True)
+    product_id: int = Field(foreign_key="product.id", unique=True, index=True) # One catalog entry per product
+    is_visible_in_catalog: bool = Field(default=True)
+    is_sold_out_in_catalog: bool = Field(default=False) # Manually mark as sold out in catalog
+    promo_text: Optional[str] = Field(default=None, max_length=255)
+    display_order: int = Field(default=0) # For ordering in catalog
+    catalog_price: Optional[float] = Field(default=None) # Override product price for catalog
+    catalog_image_url: Optional[str] = Field(default=None) # Override product image for catalog
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
+    product: Product = Relationship(back_populates="catalog_entry_rel")
 
 class CatalogEntryApiResponse(BaseModel):
-    # Fields from CatalogEntry table model / CatalogEntryBase
     id: int
     product_id: int
     is_visible_in_catalog: bool
@@ -386,153 +335,106 @@ class CatalogEntryApiResponse(BaseModel):
     display_order: int
     created_at: datetime
     updated_at: datetime
-
-    # Fields that might be overridden (actual values from CatalogEntry ORM object)
     catalog_price: Optional[float] = None
     catalog_image_url: Optional[str] = None
-
-    # Nested product details
     product: ProductRead
-
-    # Effective fields to be calculated and populated by endpoint logic
     effective_price: float
     effective_image_url: Optional[str]
-
-    class Config:
-        from_attributes = True # For Pydantic V2, to allow creating from ORM objects
-
+    class Config: from_attributes = True
 
 # --- Cart Models ---
 class Cart(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id", unique=True, index=True) # One cart per user
+    user_id: int = Field(foreign_key="user.id", unique=True, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
     updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False, sa_column_kwargs={"onupdate": datetime.utcnow})
-
-    # Relationships
     items: List["CartItem"] = Relationship(back_populates="cart", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
-    user: "User" = Relationship(back_populates="cart")
-
+    user: User = Relationship(back_populates="cart")
 
 class CartItemBase(SQLModel):
-    product_id: int = Field(gt=0) # Ensure product_id is positive
+    product_id: int = Field(gt=0)
     quantity: int = Field(default=1, gt=0)
 
-
 class CartItemCreate(CartItemBase):
-    pass # Inherits fields from CartItemBase
-
+    pass
 
 class CartItemUpdate(SQLModel):
-    quantity: int = Field(gt=0) # Quantity must be positive
+    quantity: int = Field(gt=0)
 
-
-class CartItem(SQLModel, table=True): # Define table model after base and create/update schemas
+class CartItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     cart_id: int = Field(foreign_key="cart.id", index=True)
     product_id: int = Field(foreign_key="product.id", index=True)
     quantity: int = Field(default=1, gt=0)
     added_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    price_at_addition: Optional[float] = Field(default=None) # Price when product was added
-
-    # Relationships
-    cart: "Cart" = Relationship(back_populates="items")
-    product: "Product" = Relationship() # Uni-directional for now
-
-    # Unique constraint for cart_id and product_id
+    price_at_addition: Optional[float] = Field(default=None)
+    cart: Cart = Relationship(back_populates="items")
+    product: Product = Relationship()
     __table_args__ = (UniqueConstraint("cart_id", "product_id", name="uq_cart_product"),)
 
-
-class CartItemRead(CartItemBase): # For API responses
+class CartItemRead(CartItemBase):
     id: int
-    # product_id and quantity inherited from CartItemBase
     price_at_addition: Optional[float] = None
-    added_at: datetime # Added from CartItem model
-    product: "ProductRead"
+    added_at: datetime
+    product: ProductRead
 
-
-class CartRead(SQLModel): # For API response for the whole cart
+class CartRead(SQLModel):
     id: int
     user_id: int
     created_at: datetime
     updated_at: datetime
     items: List[CartItemRead] = []
-
     @computed_field
     @property
     def total_cart_price(self) -> float:
         total = 0.0
         for item in self.items:
             if item.product:
-                # Prioritize price_showroom if available, otherwise fallback to price_revista
                 price_to_use = item.product.price_showroom if item.product.price_showroom is not None else item.product.price_revista
-                if isinstance(price_to_use, (int, float)):
-                    total += item.quantity * price_to_use
+                if isinstance(price_to_use, (int, float)): total += item.quantity * price_to_use
         return round(total, 2)
-
 
 # --- Site Configuration Model ---
 class SiteConfiguration(SQLModel, table=True):
-    # Using a fixed ID to enforce a singleton pattern (only one row in this table)
-    # The application logic will always try to get/update the row with id=1.
     id: Optional[int] = Field(default=1, primary_key=True, nullable=False)
-
     site_name: Optional[str] = Field(default="Showroom Natura OjitOs", max_length=255)
     contact_email: Optional[str] = Field(default=None, max_length=255)
     contact_phone: Optional[str] = Field(default=None, max_length=50)
-    logo_url: Optional[str] = Field(default=None, max_length=512) # URL or path to logo
-
-    # Brand Colors (stored as hex, e.g., "#RRGGBB")
-    color_primary: Optional[str] = Field(default="#E83E8C", max_length=7) # Example: Natura Pink
-    color_secondary: Optional[str] = Field(default="#FF7F00", max_length=7) # Example: Natura Orange
-    color_accent: Optional[str] = Field(default="#4CAF50", max_length=7)  # Example: Natura Green
-
-    # Social Media Links
+    logo_url: Optional[str] = Field(default=None, max_length=512)
+    color_primary: Optional[str] = Field(default="#E83E8C", max_length=7)
+    color_secondary: Optional[str] = Field(default="#FF7F00", max_length=7)
+    color_accent: Optional[str] = Field(default="#4CAF50", max_length=7)
     social_instagram_url: Optional[str] = Field(default=None, max_length=512)
     social_tiktok_url: Optional[str] = Field(default=None, max_length=512)
-    social_whatsapp_url: Optional[str] = Field(default=None, max_length=512) # e.g., wa.me link
+    social_whatsapp_url: Optional[str] = Field(default=None, max_length=512)
     online_fair_url: Optional[str] = Field(default=None, max_length=512)
-
-    # Physical Address
-    showroom_address: Optional[str] = Field(default=None, max_length=1024) # Free text or structured JSON string
-
-    # System Parameters
-    system_param_points_per_currency_unit: Optional[float] = Field(default=0.1, ge=0) # e.g., 0.1 points per S/.1
+    showroom_address: Optional[str] = Field(default=None, max_length=1024)
+    system_param_points_per_currency_unit: Optional[float] = Field(default=0.1, ge=0)
     system_param_default_showroom_discount_percentage: Optional[int] = Field(default=20, ge=0, le=100)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow}, nullable=False)
 
-    # Timestamps
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        sa_column_kwargs={"onupdate": datetime.utcnow},
-        nullable=False
-    )
-
-
-# --- Site Configuration Pydantic Schemas ---
 class SiteConfigurationRead(SQLModel):
-    # Based on SiteConfiguration table model, id is not usually sent to client for singleton config
-    site_name: str # Has default in table, so expected in read
+    site_name: str
     contact_email: Optional[str]
     contact_phone: Optional[str]
-    logo_url: Optional[str] # URL for the logo, managed by separate endpoint
-    color_primary: str # Has default
-    color_secondary: str # Has default
-    color_accent: str # Has default
+    logo_url: Optional[str]
+    color_primary: str
+    color_secondary: str
+    color_accent: str
     social_instagram_url: Optional[str]
     social_tiktok_url: Optional[str]
     social_whatsapp_url: Optional[str]
     online_fair_url: Optional[str]
     showroom_address: Optional[str]
-    system_param_points_per_currency_unit: float # Has default
-    system_param_default_showroom_discount_percentage: int # Has default
+    system_param_points_per_currency_unit: float
+    system_param_default_showroom_discount_percentage: int
     updated_at: datetime
 
 class SiteConfigurationUpdate(SQLModel):
     site_name: Optional[str] = Field(default=None, max_length=255)
     contact_email: Optional[str] = Field(default=None, max_length=255)
     contact_phone: Optional[str] = Field(default=None, max_length=50)
-    # logo_url is managed by a separate endpoint, not included here.
-    color_primary: Optional[str] = Field(default=None, max_length=7) # Hex color validation can be added with custom validator if needed
+    color_primary: Optional[str] = Field(default=None, max_length=7)
     color_secondary: Optional[str] = Field(default=None, max_length=7)
     color_accent: Optional[str] = Field(default=None, max_length=7)
     social_instagram_url: Optional[str] = Field(default=None, max_length=512)
@@ -542,30 +444,28 @@ class SiteConfigurationUpdate(SQLModel):
     showroom_address: Optional[str] = Field(default=None, max_length=1024)
     system_param_points_per_currency_unit: Optional[float] = Field(default=None, ge=0)
     system_param_default_showroom_discount_percentage: Optional[int] = Field(default=None, ge=0, le=100)
-    # id and updated_at are not directly updatable by client.
 
+# --- Gift Item Model ---
+class GiftItemRead(SQLModel): # Forward declaration
+    id: int
+    product_id: int
+    points_required: int
+    stock_available_for_redeem: int
+    is_active_as_gift: bool
+    created_at: datetime
+    updated_at: datetime
+    product: ProductRead
 
-# --- Gift Item Model (for point redemption) ---
 class GiftItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-
     product_id: int = Field(foreign_key="product.id", unique=True, index=True, nullable=False)
-
     points_required: int = Field(gt=0, nullable=False)
     stock_available_for_redeem: int = Field(default=0, ge=0, nullable=False)
     is_active_as_gift: bool = Field(default=True, index=True, nullable=False)
-
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        sa_column_kwargs={"onupdate": datetime.utcnow},
-        nullable=False
-    )
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow}, nullable=False)
+    product: Product = Relationship()
 
-    product: "Product" = Relationship()
-
-
-# --- Pydantic Schemas for GiftItem ---
 class GiftItemBase(SQLModel):
     product_id: int = Field(gt=0)
     points_required: int = Field(gt=0)
@@ -580,44 +480,26 @@ class GiftItemUpdate(SQLModel):
     stock_available_for_redeem: Optional[int] = Field(default=None, ge=0)
     is_active_as_gift: Optional[bool] = None
 
-class GiftItemRead(GiftItemBase):
+class GiftItemRead(GiftItemBase): # Full definition
     id: int
     created_at: datetime
     updated_at: datetime
-    product: "ProductRead"
-
+    product: ProductRead
 
 # --- Redemption Request Model ---
 class RedemptionRequest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-
     user_id: int = Field(foreign_key="user.id", index=True, nullable=False)
     gift_item_id: int = Field(foreign_key="giftitem.id", index=True, nullable=False)
-
     points_at_request: int = Field(gt=0, nullable=False)
-
     product_details_at_request: Optional[str] = Field(default=None, max_length=1024)
-
-    status: RedemptionRequestStatusEnum = Field(
-        default=RedemptionRequestStatusEnum.PENDIENTE_APROBACION,
-        index=True,
-        nullable=False
-    )
-
+    status: RedemptionRequestStatusEnum = Field(default=RedemptionRequestStatusEnum.PENDIENTE_APROBACION, index=True, nullable=False)
     requested_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        sa_column_kwargs={"onupdate": datetime.utcnow},
-        nullable=False
-    )
-
+    updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow}, nullable=False)
     admin_notes: Optional[str] = Field(default=None, max_length=512)
+    user: User = Relationship()
+    gift_item: GiftItem = Relationship()
 
-    user: "User" = Relationship()
-    gift_item: "GiftItem" = Relationship()
-
-
-# --- Pydantic Schemas for RedemptionRequest ---
 class RedemptionRequestBase(SQLModel):
     gift_item_id: int = Field(gt=0)
 
@@ -641,6 +523,5 @@ class RedemptionRequestRead(SQLModel):
     requested_at: datetime
     updated_at: datetime
     admin_notes: Optional[str]
-
-    gift_item: "GiftItemRead"
-    user: Optional["UserRead"] = None
+    gift_item: GiftItemRead
+    user: Optional[UserRead] = None
