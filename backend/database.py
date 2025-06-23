@@ -130,7 +130,8 @@ class CategoryCreate(CategoryBase):
 class CategoryRead(CategoryBase):
     id: int
 
-class ProductRead(SQLModel): # Forward declaration for CategoryReadWithProducts
+# Forward declaration for ProductRead to be used in CategoryReadWithProducts
+class ProductRead(SQLModel):
     id: int
     name: str
     description: Optional[str] = None
@@ -141,7 +142,7 @@ class ProductRead(SQLModel): # Forward declaration for CategoryReadWithProducts
     stock_actual: int = Field(default=0)
     stock_critico: Optional[int] = Field(default=0)
     tags: List[TagRead] = []
-    # category: Optional["CategoryRead"] = None # This would be circular, category is defined below
+    category: Optional[CategoryRead] = None # CategoryRead is now defined above
 
 class CategoryReadWithProducts(CategoryRead):
     products: List[ProductRead] = []
@@ -196,10 +197,9 @@ class ProductUpdate(SQLModel):
             if 'price_feria' not in values or values.get('price_feria') is None: values['price_feria'] = price_revista * 0.65
         return values
 
-class ProductRead(ProductBase): # Full definition of ProductRead
-    id: int
-    tags: List[TagRead] = []
-    category: Optional[CategoryRead] = None # Now CategoryRead is defined
+# Full definition of ProductRead (it was forward-declared earlier)
+# No need to redefine if the forward declaration was complete enough.
+# The forward declaration of ProductRead is now complete with 'category' field.
 
 # Client Model (appears unused, but kept from original)
 class Client(SQLModel, table=True):
@@ -213,15 +213,16 @@ class SaleBase(SQLModel):
     status: SaleStatusEnum = Field(default=SaleStatusEnum.PENDIENTE_PREPARACION)
     discount_amount: Optional[float] = Field(default=0.0)
 
-class SaleItemRead(SQLModel): # Forward declaration for SaleRead
+# Forward declaration for SaleItemRead to be used in SaleRead
+class SaleItemRead(SQLModel):
     id: int
-    product_id: int
-    quantity: int
-    price_at_sale: Optional[float]
+    product_id: int # From SaleItemBase
+    quantity: int # From SaleItemBase
+    price_at_sale: Optional[float] # From SaleItemBase
     subtotal: float
     product: ProductRead
 
-class SaleRead(SaleBase): # Forward declaration for Sale
+class SaleRead(SaleBase):
     id: int
     user_id: int
     sale_date: datetime
@@ -261,10 +262,11 @@ class SaleItem(SQLModel, table=True):
 class SaleItemCreate(SaleItemBase):
     pass
 
-class SaleItemRead(SaleItemBase): # Full definition
-    id: int
-    subtotal: float
-    product: ProductRead
+# Full definition of SaleItemRead (it was forward-declared)
+# class SaleItemRead(SaleItemBase): # No need to redefine if forward was sufficient
+#     id: int
+#     subtotal: float
+#     product: ProductRead
 
 class SaleCreate(SQLModel):
     user_id: Optional[int] = None
@@ -275,15 +277,16 @@ class SaleCreate(SQLModel):
 class SaleUpdate(SaleBase):
     pass
 
-class SaleRead(SaleBase): # Full definition
-    id: int
-    user_id: int
-    sale_date: datetime
-    updated_at: datetime
-    items: List[SaleItemRead] = []
-    total_amount: float
-    points_earned: int
-    user: Optional[UserRead] = None
+# Full definition of SaleRead (it was forward-declared)
+# class SaleRead(SaleBase):
+#     id: int
+#     user_id: int
+#     sale_date: datetime
+#     updated_at: datetime
+#     items: List[SaleItemRead] = []
+#     total_amount: float
+#     points_earned: int
+#     user: Optional[UserRead] = None
 
 # --- User's Own Profile Update Schema ---
 class MyProfileUpdate(SQLModel):
@@ -313,18 +316,38 @@ class WishlistItemRead(WishlistItemBase):
     product: ProductRead
 
 # --- Catalog Models ---
-class CatalogEntry(SQLModel, table=True): # Assuming CatalogEntry model definition
+class CatalogEntry(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    product_id: int = Field(foreign_key="product.id", unique=True, index=True) # One catalog entry per product
+    product_id: int = Field(foreign_key="product.id", unique=True, index=True)
     is_visible_in_catalog: bool = Field(default=True)
-    is_sold_out_in_catalog: bool = Field(default=False) # Manually mark as sold out in catalog
+    is_sold_out_in_catalog: bool = Field(default=False)
     promo_text: Optional[str] = Field(default=None, max_length=255)
-    display_order: int = Field(default=0) # For ordering in catalog
-    catalog_price: Optional[float] = Field(default=None) # Override product price for catalog
-    catalog_image_url: Optional[str] = Field(default=None) # Override product image for catalog
+    display_order: int = Field(default=0)
+    catalog_price: Optional[float] = Field(default=None)
+    catalog_image_url: Optional[str] = Field(default=None, max_length=512)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
     product: Product = Relationship(back_populates="catalog_entry_rel")
+
+class CatalogEntryBase(SQLModel):
+    product_id: int
+    is_visible_in_catalog: bool = Field(default=True)
+    is_sold_out_in_catalog: bool = Field(default=False)
+    promo_text: Optional[str] = Field(default=None, max_length=255)
+    display_order: int = Field(default=0)
+    catalog_price: Optional[float] = Field(default=None)
+    catalog_image_url: Optional[str] = Field(default=None, max_length=512)
+
+class CatalogEntryCreate(CatalogEntryBase):
+    pass
+
+class CatalogEntryUpdate(SQLModel):
+    is_visible_in_catalog: Optional[bool] = None
+    is_sold_out_in_catalog: Optional[bool] = None
+    promo_text: Optional[str] = Field(default=None, max_length=255)
+    display_order: Optional[int] = None
+    catalog_price: Optional[float] = None
+    catalog_image_url: Optional[str] = Field(default=None, max_length=512)
 
 class CatalogEntryApiResponse(BaseModel):
     id: int
@@ -446,7 +469,8 @@ class SiteConfigurationUpdate(SQLModel):
     system_param_default_showroom_discount_percentage: Optional[int] = Field(default=None, ge=0, le=100)
 
 # --- Gift Item Model ---
-class GiftItemRead(SQLModel): # Forward declaration
+# Forward declaration for GiftItemRead to be used in RedemptionRequestRead
+class GiftItemRead(SQLModel):
     id: int
     product_id: int
     points_required: int
@@ -480,11 +504,12 @@ class GiftItemUpdate(SQLModel):
     stock_available_for_redeem: Optional[int] = Field(default=None, ge=0)
     is_active_as_gift: Optional[bool] = None
 
-class GiftItemRead(GiftItemBase): # Full definition
-    id: int
-    created_at: datetime
-    updated_at: datetime
-    product: ProductRead
+# Full definition of GiftItemRead (it was forward-declared)
+# class GiftItemRead(GiftItemBase): # No need to redefine if forward was sufficient
+#     id: int
+#     created_at: datetime
+#     updated_at: datetime
+#     product: ProductRead
 
 # --- Redemption Request Model ---
 class RedemptionRequest(SQLModel, table=True):
@@ -523,5 +548,5 @@ class RedemptionRequestRead(SQLModel):
     requested_at: datetime
     updated_at: datetime
     admin_notes: Optional[str]
-    gift_item: GiftItemRead
+    gift_item: GiftItemRead # GiftItemRead is now fully defined or forward-declared
     user: Optional[UserRead] = None
